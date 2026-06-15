@@ -1,0 +1,2 @@
+/home/yasmine/Desktop/spi-shenanigans/build-qnx-rpi5/appCluster_autogen/include/../EWIEGA46WW/moc_SpiReader.cpp.json
+/home/yasmine/Desktop/spi-shenanigans/build-qnx-rpi5/appCluster_autogen/include/../EWIEGA46WW/moc_cluster.cpp.json

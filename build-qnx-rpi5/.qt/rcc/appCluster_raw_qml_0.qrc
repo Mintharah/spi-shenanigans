@@ -1,0 +1,7 @@
+<RCC>
+  <qresource prefix="/qt/qml/Cluster/">
+    <file alias="Main.qml">/home/yasmine/Desktop/spi-shenanigans/Cluster/Main.qml</file>
+    <file alias="images.qrc">/home/yasmine/Desktop/spi-shenanigans/Cluster/images.qrc</file>
+  </qresource>
+</RCC>
+

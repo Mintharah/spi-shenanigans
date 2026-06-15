@@ -1,0 +1,14 @@
+-rootPath
+/home/yasmine/Desktop/spi-shenanigans/Cluster
+-cmake-output
+-output-file
+/home/yasmine/Desktop/spi-shenanigans/build-qnx-rpi5/.qt/qml_imports/appCluster_build.cmake
+-importPath
+/home/yasmine/Desktop/spi-shenanigans/build-qnx-rpi5/Cluster
+-importPath
+/home/yasmine/Desktop/spi-shenanigans/build-qnx-rpi5
+-importPath
+/home/yasmine/qt6-qnx/qml
+-qrcFiles
+/home/yasmine/Desktop/spi-shenanigans/build-qnx-rpi5/.qt/rcc/qmake_Cluster.qrc
+/home/yasmine/Desktop/spi-shenanigans/build-qnx-rpi5/.qt/rcc/appCluster_raw_qml_0.qrc

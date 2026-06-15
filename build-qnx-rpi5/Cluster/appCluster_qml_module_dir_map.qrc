@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/">
+    <file alias="/qt/qml/Cluster">/home/yasmine/Desktop/spi-shenanigans/build-qnx-rpi5/Cluster</file>
+
+  </qresource>
+</RCC>

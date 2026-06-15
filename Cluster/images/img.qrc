@@ -1,0 +1,9 @@
+<RCC>
+    <qresource prefix="/">
+        <file>car.png</file>
+        <file>speed.svg</file>
+        <file>temp.svg</file>
+        <file>vibration.svg</file>
+        <file>voltage.svg</file>
+    </qresource>
+</RCC>

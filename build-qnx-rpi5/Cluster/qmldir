@@ -1,0 +1,6 @@
+module Cluster
+typeinfo appCluster.qmltypes
+prefer :/qt/qml/Cluster/
+Main 254.0 Main.qml
+depends QtQuick
+

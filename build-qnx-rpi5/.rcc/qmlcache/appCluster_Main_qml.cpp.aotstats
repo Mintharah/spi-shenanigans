@@ -1,0 +1,1212 @@
+[
+    {
+        "moduleFiles": [
+            {
+                "entries": [
+                    {
+                        "codegenSuccessful": false,
+                        "column": 29,
+                        "durationMicroseconds": 146,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "speedVal",
+                        "line": 21
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 29,
+                        "durationMicroseconds": 93,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "powerVal",
+                        "line": 22
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 21,
+                        "durationMicroseconds": 90,
+                        "errorMessage": "",
+                        "functionName": "theme",
+                        "line": 15
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 23,
+                        "durationMicroseconds": 36,
+                        "errorMessage": "",
+                        "functionName": "fill",
+                        "line": 26
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 27,
+                        "durationMicroseconds": 28,
+                        "errorMessage": "",
+                        "functionName": "fill",
+                        "line": 29
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 20,
+                        "durationMicroseconds": 49,
+                        "errorMessage": "",
+                        "functionName": "width",
+                        "line": 34
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 21,
+                        "durationMicroseconds": 76,
+                        "errorMessage": "",
+                        "functionName": "height",
+                        "line": 35
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 31,
+                        "durationMicroseconds": 28,
+                        "errorMessage": "",
+                        "functionName": "centerIn",
+                        "line": 33
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 30,
+                        "durationMicroseconds": 40,
+                        "errorMessage": "",
+                        "functionName": "orientation",
+                        "line": 38
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 28,
+                        "durationMicroseconds": 58,
+                        "errorMessage": "",
+                        "functionName": "color",
+                        "line": 45
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 48,
+                        "durationMicroseconds": 79,
+                        "errorMessage": "",
+                        "functionName": "baseStartAngle",
+                        "line": 71
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 44,
+                        "durationMicroseconds": 64,
+                        "errorMessage": "",
+                        "functionName": "totalSweep",
+                        "line": 72
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 31,
+                        "durationMicroseconds": 27,
+                        "errorMessage": "",
+                        "functionName": "centerIn",
+                        "line": 76
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 23,
+                        "durationMicroseconds": 101,
+                        "errorMessage": "",
+                        "functionName": "text",
+                        "line": 82
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 30,
+                        "durationMicroseconds": 39,
+                        "errorMessage": "",
+                        "functionName": "weight",
+                        "line": 85
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 43,
+                        "durationMicroseconds": 54,
+                        "errorMessage": "",
+                        "functionName": "horizontalCenter",
+                        "line": 87
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 34,
+                        "durationMicroseconds": 19,
+                        "errorMessage": "Cannot access value for name root",
+                        "functionName": "shadowColor",
+                        "line": 91
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 23,
+                        "durationMicroseconds": 39,
+                        "errorMessage": "",
+                        "functionName": "text",
+                        "line": 97
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 24,
+                        "durationMicroseconds": 15,
+                        "errorMessage": "Cannot access value for name root",
+                        "functionName": "color",
+                        "line": 98
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 30,
+                        "durationMicroseconds": 37,
+                        "errorMessage": "",
+                        "functionName": "weight",
+                        "line": 100
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 43,
+                        "durationMicroseconds": 50,
+                        "errorMessage": "",
+                        "functionName": "horizontalCenter",
+                        "line": 104
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 27,
+                        "durationMicroseconds": 25,
+                        "errorMessage": "",
+                        "functionName": "fill",
+                        "line": 110
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 33,
+                        "durationMicroseconds": 37,
+                        "errorMessage": "",
+                        "functionName": "startAngle",
+                        "line": 121
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 33,
+                        "durationMicroseconds": 126,
+                        "errorMessage": "",
+                        "functionName": "sweepAngle",
+                        "line": 122
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 41,
+                        "durationMicroseconds": 14,
+                        "errorMessage": "Cannot access value for name index",
+                        "functionName": "progress",
+                        "line": 131
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 40,
+                        "durationMicroseconds": 17,
+                        "errorMessage": "Cannot access value for name dial",
+                        "functionName": "tickVal",
+                        "line": 132
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 41,
+                        "durationMicroseconds": 31,
+                        "errorMessage": "Cannot access value for name dial",
+                        "functionName": "angleDeg",
+                        "line": 133
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 41,
+                        "durationMicroseconds": 91,
+                        "errorMessage": "",
+                        "functionName": "angleRad",
+                        "line": 134
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 26,
+                        "durationMicroseconds": 18,
+                        "errorMessage": "Cannot access value for name dial",
+                        "functionName": "visible",
+                        "line": 135
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 31,
+                        "durationMicroseconds": 34,
+                        "errorMessage": "",
+                        "functionName": "fill",
+                        "line": 130
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 28,
+                        "durationMicroseconds": 119,
+                        "errorMessage": "Cannot access value for name index",
+                        "functionName": "width",
+                        "line": 138
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 29,
+                        "durationMicroseconds": 84,
+                        "errorMessage": "Cannot access value for name index",
+                        "functionName": "height",
+                        "line": 139
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 28,
+                        "durationMicroseconds": 45,
+                        "errorMessage": "Cannot access value for name tickVal",
+                        "functionName": "color",
+                        "line": 140
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 24,
+                        "durationMicroseconds": 26,
+                        "errorMessage": "Cannot access value for name angleRad",
+                        "functionName": "x",
+                        "line": 141
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 24,
+                        "durationMicroseconds": 22,
+                        "errorMessage": "Cannot access value for name angleRad",
+                        "functionName": "y",
+                        "line": 142
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 31,
+                        "durationMicroseconds": 16,
+                        "errorMessage": "Cannot access value for name angleDeg",
+                        "functionName": "rotation",
+                        "line": 143
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 30,
+                        "durationMicroseconds": 168,
+                        "errorMessage": "Cannot access value for name index",
+                        "functionName": "visible",
+                        "line": 147
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 27,
+                        "durationMicroseconds": 22,
+                        "errorMessage": "Cannot access value for name tickVal",
+                        "functionName": "text",
+                        "line": 148
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 30,
+                        "durationMicroseconds": 33,
+                        "errorMessage": "Cannot access value for name tickVal",
+                        "functionName": "opacity",
+                        "line": 152
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 24,
+                        "durationMicroseconds": 32,
+                        "errorMessage": "Cannot access value for name angleRad",
+                        "functionName": "x",
+                        "line": 153
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 24,
+                        "durationMicroseconds": 29,
+                        "errorMessage": "Cannot access value for name angleRad",
+                        "functionName": "y",
+                        "line": 154
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 27,
+                        "durationMicroseconds": 32,
+                        "errorMessage": "",
+                        "functionName": "fill",
+                        "line": 161
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 30,
+                        "durationMicroseconds": 14,
+                        "errorMessage": "Cannot access value for name root",
+                        "functionName": "strokeColor",
+                        "line": 171
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 27,
+                        "durationMicroseconds": 39,
+                        "errorMessage": "",
+                        "functionName": "capStyle",
+                        "line": 174
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 33,
+                        "durationMicroseconds": 45,
+                        "errorMessage": "",
+                        "functionName": "startAngle",
+                        "line": 180
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 33,
+                        "durationMicroseconds": 235,
+                        "errorMessage": "",
+                        "functionName": "sweepAngle",
+                        "line": 181
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 30,
+                        "durationMicroseconds": 39,
+                        "errorMessage": "",
+                        "functionName": "transformOrigin",
+                        "line": 193
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 23,
+                        "durationMicroseconds": 306,
+                        "errorMessage": "",
+                        "functionName": "rotation",
+                        "line": 194
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 39,
+                        "durationMicroseconds": 55,
+                        "errorMessage": "",
+                        "functionName": "horizontalCenter",
+                        "line": 191
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 29,
+                        "durationMicroseconds": 49,
+                        "errorMessage": "",
+                        "functionName": "bottom",
+                        "line": 192
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 28,
+                        "durationMicroseconds": 18,
+                        "errorMessage": "Cannot access value for name root",
+                        "functionName": "color",
+                        "line": 203
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 27,
+                        "durationMicroseconds": 28,
+                        "errorMessage": "",
+                        "functionName": "centerIn",
+                        "line": 219
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 36,
+                        "durationMicroseconds": 116,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "_target",
+                        "line": 232
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 27,
+                        "durationMicroseconds": 26,
+                        "errorMessage": "",
+                        "functionName": "currentValue",
+                        "line": 233
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 27,
+                        "durationMicroseconds": 49,
+                        "errorMessage": "",
+                        "functionName": "left",
+                        "line": 226
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 31,
+                        "durationMicroseconds": 24,
+                        "errorMessage": "",
+                        "functionName": "centerIn",
+                        "line": 246
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 17,
+                        "durationMicroseconds": 213,
+                        "errorMessage": "",
+                        "functionName": "updateTime",
+                        "line": 264
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 30,
+                        "durationMicroseconds": 57,
+                        "errorMessage": "",
+                        "functionName": "top",
+                        "line": 251
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 43,
+                        "durationMicroseconds": 54,
+                        "errorMessage": "",
+                        "functionName": "horizontalCenter",
+                        "line": 253
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 30,
+                        "durationMicroseconds": 49,
+                        "errorMessage": "",
+                        "functionName": "weight",
+                        "line": 257
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 34,
+                        "durationMicroseconds": 17,
+                        "errorMessage": "Cannot access value for name root",
+                        "functionName": "shadowColor",
+                        "line": 261
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 40,
+                        "durationMicroseconds": 37,
+                        "errorMessage": "",
+                        "functionName": "onCompleted",
+                        "line": 267
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 30,
+                        "durationMicroseconds": 59,
+                        "errorMessage": "",
+                        "functionName": "onTriggered",
+                        "line": 274
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 27,
+                        "durationMicroseconds": 43,
+                        "errorMessage": "",
+                        "functionName": "fillMode",
+                        "line": 285
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 43,
+                        "durationMicroseconds": 57,
+                        "errorMessage": "",
+                        "functionName": "horizontalCenter",
+                        "line": 280
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 29,
+                        "durationMicroseconds": 48,
+                        "errorMessage": "",
+                        "functionName": "source",
+                        "line": 289
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 35,
+                        "durationMicroseconds": 175,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "colorization",
+                        "line": 291
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 35,
+                        "durationMicroseconds": 45,
+                        "errorMessage": "",
+                        "functionName": "fill",
+                        "line": 290
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 34,
+                        "durationMicroseconds": 38,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "running",
+                        "line": 296
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 32,
+                        "durationMicroseconds": 38,
+                        "errorMessage": "",
+                        "functionName": "loops",
+                        "line": 297
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 36,
+                        "durationMicroseconds": 62,
+                        "errorMessage": "",
+                        "functionName": "onStopped",
+                        "line": 306
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 43,
+                        "durationMicroseconds": 53,
+                        "errorMessage": "",
+                        "functionName": "horizontalCenter",
+                        "line": 313
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 33,
+                        "durationMicroseconds": 49,
+                        "errorMessage": "",
+                        "functionName": "source",
+                        "line": 327
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 44,
+                        "durationMicroseconds": 177,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "colorizationColor",
+                        "line": 330
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 34,
+                        "durationMicroseconds": 129,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "opacity",
+                        "line": 331
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 39,
+                        "durationMicroseconds": 46,
+                        "errorMessage": "",
+                        "functionName": "fill",
+                        "line": 328
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 38,
+                        "durationMicroseconds": 36,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "running",
+                        "line": 334
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 36,
+                        "durationMicroseconds": 37,
+                        "errorMessage": "",
+                        "functionName": "loops",
+                        "line": 335
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 43,
+                        "durationMicroseconds": 50,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "duration",
+                        "line": 338
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 43,
+                        "durationMicroseconds": 49,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "duration",
+                        "line": 342
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 33,
+                        "durationMicroseconds": 46,
+                        "errorMessage": "",
+                        "functionName": "source",
+                        "line": 356
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 44,
+                        "durationMicroseconds": 165,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "colorizationColor",
+                        "line": 359
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 34,
+                        "durationMicroseconds": 125,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "opacity",
+                        "line": 360
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 39,
+                        "durationMicroseconds": 49,
+                        "errorMessage": "",
+                        "functionName": "fill",
+                        "line": 357
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 38,
+                        "durationMicroseconds": 36,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "running",
+                        "line": 363
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 36,
+                        "durationMicroseconds": 39,
+                        "errorMessage": "",
+                        "functionName": "loops",
+                        "line": 364
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 43,
+                        "durationMicroseconds": 47,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "duration",
+                        "line": 367
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 43,
+                        "durationMicroseconds": 43,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "duration",
+                        "line": 371
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 33,
+                        "durationMicroseconds": 47,
+                        "errorMessage": "",
+                        "functionName": "source",
+                        "line": 385
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 44,
+                        "durationMicroseconds": 166,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "colorizationColor",
+                        "line": 388
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 34,
+                        "durationMicroseconds": 123,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "opacity",
+                        "line": 389
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 39,
+                        "durationMicroseconds": 57,
+                        "errorMessage": "",
+                        "functionName": "fill",
+                        "line": 386
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 38,
+                        "durationMicroseconds": 34,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "running",
+                        "line": 392
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 36,
+                        "durationMicroseconds": 38,
+                        "errorMessage": "",
+                        "functionName": "loops",
+                        "line": 393
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 43,
+                        "durationMicroseconds": 45,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "duration",
+                        "line": 396
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 43,
+                        "durationMicroseconds": 42,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "duration",
+                        "line": 400
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 33,
+                        "durationMicroseconds": 48,
+                        "errorMessage": "",
+                        "functionName": "source",
+                        "line": 414
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 44,
+                        "durationMicroseconds": 161,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "colorizationColor",
+                        "line": 417
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 34,
+                        "durationMicroseconds": 122,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "opacity",
+                        "line": 418
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 39,
+                        "durationMicroseconds": 47,
+                        "errorMessage": "",
+                        "functionName": "fill",
+                        "line": 415
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 38,
+                        "durationMicroseconds": 34,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "running",
+                        "line": 421
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 36,
+                        "durationMicroseconds": 38,
+                        "errorMessage": "",
+                        "functionName": "loops",
+                        "line": 422
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 43,
+                        "durationMicroseconds": 43,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "duration",
+                        "line": 425
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 43,
+                        "durationMicroseconds": 40,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "duration",
+                        "line": 429
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 31,
+                        "durationMicroseconds": 27,
+                        "errorMessage": "",
+                        "functionName": "fill",
+                        "line": 438
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 31,
+                        "durationMicroseconds": 59,
+                        "errorMessage": "",
+                        "functionName": "color",
+                        "line": 440
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 36,
+                        "durationMicroseconds": 109,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "_target",
+                        "line": 462
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 27,
+                        "durationMicroseconds": 28,
+                        "errorMessage": "",
+                        "functionName": "currentValue",
+                        "line": 463
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 28,
+                        "durationMicroseconds": 53,
+                        "errorMessage": "",
+                        "functionName": "right",
+                        "line": 456
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 25,
+                        "durationMicroseconds": 48,
+                        "errorMessage": "",
+                        "functionName": "bottom",
+                        "line": 477
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 35,
+                        "durationMicroseconds": 49,
+                        "errorMessage": "",
+                        "functionName": "horizontalCenter",
+                        "line": 479
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 20,
+                        "durationMicroseconds": 139,
+                        "errorMessage": "Cannot generate efficient code for internal conversion with incompatible or ambiguous types: call to method rgba, returning QVariant -> QColor stored as QVariant",
+                        "functionName": "color",
+                        "line": 483
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 27,
+                        "durationMicroseconds": 27,
+                        "errorMessage": "",
+                        "functionName": "fill",
+                        "line": 482
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 27,
+                        "durationMicroseconds": 143,
+                        "errorMessage": "Cannot generate efficient code for internal conversion with incompatible or ambiguous types: call to method rgba, returning QVariant -> QColor stored as QVariant",
+                        "functionName": "color",
+                        "line": 485
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 27,
+                        "durationMicroseconds": 28,
+                        "errorMessage": "",
+                        "functionName": "fill",
+                        "line": 495
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 24,
+                        "durationMicroseconds": 39,
+                        "errorMessage": "",
+                        "functionName": "width",
+                        "line": 500
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 34,
+                        "durationMicroseconds": 41,
+                        "errorMessage": "",
+                        "functionName": "weight",
+                        "line": 507
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 35,
+                        "durationMicroseconds": 57,
+                        "errorMessage": "",
+                        "functionName": "left",
+                        "line": 510
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 45,
+                        "durationMicroseconds": 52,
+                        "errorMessage": "",
+                        "functionName": "verticalCenter",
+                        "line": 512
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 28,
+                        "durationMicroseconds": 82,
+                        "errorMessage": "",
+                        "functionName": "width",
+                        "line": 517
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 37,
+                        "durationMicroseconds": 55,
+                        "errorMessage": "",
+                        "functionName": "bottom",
+                        "line": 515
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 47,
+                        "durationMicroseconds": 53,
+                        "errorMessage": "",
+                        "functionName": "horizontalCenter",
+                        "line": 516
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 38,
+                        "durationMicroseconds": 41,
+                        "errorMessage": "",
+                        "functionName": "orientation",
+                        "line": 520
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 36,
+                        "durationMicroseconds": 142,
+                        "errorMessage": "Cannot generate efficient code for internal conversion with incompatible or ambiguous types: call to method rgba, returning QVariant -> QColor stored as QVariant",
+                        "functionName": "color",
+                        "line": 527
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 24,
+                        "durationMicroseconds": 40,
+                        "errorMessage": "",
+                        "functionName": "width",
+                        "line": 538
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 28,
+                        "durationMicroseconds": 300,
+                        "errorMessage": "Cannot generate efficient code for storing an array in a non-sequence type",
+                        "functionName": "model",
+                        "line": 541
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 32,
+                        "durationMicroseconds": 56,
+                        "errorMessage": "",
+                        "functionName": "width",
+                        "line": 560
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 38,
+                        "durationMicroseconds": 111,
+                        "errorMessage": "Cannot access value for name index",
+                        "functionName": "visible",
+                        "line": 563
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 43,
+                        "durationMicroseconds": 58,
+                        "errorMessage": "",
+                        "functionName": "left",
+                        "line": 564
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 53,
+                        "durationMicroseconds": 54,
+                        "errorMessage": "",
+                        "functionName": "verticalCenter",
+                        "line": 565
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 44,
+                        "durationMicroseconds": 141,
+                        "errorMessage": "Cannot generate efficient code for internal conversion with incompatible or ambiguous types: call to method rgba, returning QVariant -> QColor stored as QVariant",
+                        "functionName": "color",
+                        "line": 575
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 47,
+                        "durationMicroseconds": 29,
+                        "errorMessage": "",
+                        "functionName": "centerIn",
+                        "line": 584
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 39,
+                        "durationMicroseconds": 194,
+                        "errorMessage": "Cannot access value for name modelData",
+                        "functionName": "text",
+                        "line": 587
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 59,
+                        "durationMicroseconds": 54,
+                        "errorMessage": "",
+                        "functionName": "horizontalCenter",
+                        "line": 591
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 39,
+                        "durationMicroseconds": 165,
+                        "errorMessage": "Cannot access value for name modelData",
+                        "functionName": "text",
+                        "line": 594
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 40,
+                        "durationMicroseconds": 19,
+                        "errorMessage": "Cannot access value for name root",
+                        "functionName": "color",
+                        "line": 595
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 46,
+                        "durationMicroseconds": 42,
+                        "errorMessage": "",
+                        "functionName": "weight",
+                        "line": 597
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 59,
+                        "durationMicroseconds": 53,
+                        "errorMessage": "",
+                        "functionName": "horizontalCenter",
+                        "line": 599
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 22,
+                        "durationMicroseconds": 50,
+                        "errorMessage": "",
+                        "functionName": "top",
+                        "line": 612
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 35,
+                        "durationMicroseconds": 52,
+                        "errorMessage": "",
+                        "functionName": "horizontalCenter",
+                        "line": 614
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 27,
+                        "durationMicroseconds": 56,
+                        "errorMessage": "",
+                        "functionName": "left",
+                        "line": 617
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 30,
+                        "durationMicroseconds": 39,
+                        "errorMessage": "",
+                        "functionName": "weight",
+                        "line": 623
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 23,
+                        "durationMicroseconds": 181,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "text",
+                        "line": 627
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 24,
+                        "durationMicroseconds": 152,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "color",
+                        "line": 628
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 24,
+                        "durationMicroseconds": 58,
+                        "errorMessage": "",
+                        "functionName": "color",
+                        "line": 634
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 30,
+                        "durationMicroseconds": 36,
+                        "errorMessage": "",
+                        "functionName": "weight",
+                        "line": 636
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 39,
+                        "durationMicroseconds": 48,
+                        "errorMessage": "",
+                        "functionName": "horizontalCenter",
+                        "line": 640
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 19,
+                        "durationMicroseconds": 171,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "text",
+                        "line": 650
+                    },
+                    {
+                        "codegenSuccessful": false,
+                        "column": 20,
+                        "durationMicroseconds": 145,
+                        "errorMessage": "Cannot access value for name Vehicle",
+                        "functionName": "color",
+                        "line": 651
+                    },
+                    {
+                        "codegenSuccessful": true,
+                        "column": 28,
+                        "durationMicroseconds": 59,
+                        "errorMessage": "",
+                        "functionName": "right",
+                        "line": 649
+                    }
+                ],
+                "filePath": "/home/yasmine/Desktop/spi-shenanigans/Cluster/Main.qml"
+            }
+        ],
+        "moduleId": "Cluster(appCluster)"
+    }
+]

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect x="5" y="26" width="62" height="32" rx="4" stroke="#00d4ff" stroke-width="2" fill="none"/>
+  <rect x="67" y="34" width="7" height="14" rx="2" fill="#00d4ff" opacity="0.5"/>
+  <rect x="9" y="30" width="10" height="24" rx="2" fill="#00d4ff" opacity="0.9"/>
+  <rect x="22" y="30" width="10" height="24" rx="2" fill="#00d4ff" opacity="0.55"/>
+  <rect x="35" y="30" width="10" height="24" rx="2" fill="#00d4ff" opacity="0.25"/>
+  <polygon points="46,18 38,46 44,46 36,68 52,38 46,38" fill="#00d4ff"/>
+  <!-- Label -->
+  <text x="37" y="90"
+      font-size="8" fill="#00d4ff" text-anchor="middle"
+      font-family="Century Gothic, sans-serif"
+      letter-spacing="2" opacity="0.85">VOLTAGE</text>
+</svg>

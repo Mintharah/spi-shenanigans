@@ -1,0 +1,32 @@
+{
+    "classes": [
+        {
+            "className": "SpiReader",
+            "lineNumber": 11,
+            "object": true,
+            "qualifiedClassName": "SpiReader",
+            "signals": [
+                {
+                    "access": "public",
+                    "arguments": [
+                        {
+                            "name": "data",
+                            "type": "stm32_data_t"
+                        }
+                    ],
+                    "index": 0,
+                    "name": "newData",
+                    "returnType": "void"
+                }
+            ],
+            "superClasses": [
+                {
+                    "access": "public",
+                    "name": "QThread"
+                }
+            ]
+        }
+    ],
+    "inputFile": "SpiReader.h",
+    "outputRevision": 69
+}

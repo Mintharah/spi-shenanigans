@@ -1,0 +1,10 @@
+--bare
+-I
+/home/yasmine/Desktop/spi-shenanigans/build-qnx-rpi5
+-I
+/home/yasmine/qt6-qnx/qml
+--resource
+/home/yasmine/Desktop/spi-shenanigans/build-qnx-rpi5/.qt/rcc/qmake_Cluster.qrc
+--resource
+/home/yasmine/Desktop/spi-shenanigans/build-qnx-rpi5/.qt/rcc/appCluster_raw_qml_0.qrc
+/home/yasmine/Desktop/spi-shenanigans/Cluster/Main.qml
