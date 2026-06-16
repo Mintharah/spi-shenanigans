@@ -57,7 +57,8 @@ void VehicleBackend::onSpiData(stm32_data_t data)
     const float rpm = static_cast<float>(data.field6);
 
     // Adjust this scale factor for your wheel diameter / gear ratio
-    const float speed_kmh = rpm * 0.05f;
+    // const float speed_kmh = rpm * 0.05f;
+    const float speed_kmh = rpm;
 
     const float vibA = data.field1 / 1000.0f;
     const float vibB = data.field2 / 1000.0f;

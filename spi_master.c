@@ -35,8 +35,8 @@
 /* ─── User-configurable parameters ─────────────────────────────────────── */
 #define BUS               0        /* SPI bus index                        */
 #define DEV               0        /* chip-select / device index           */
-#define SPI_SPEED_HZ      1000000  /* 1 MHz                                */
-#define TIMER_INTERVAL_MS 100      /* fire every 100 ms (10 Hz)            */
+#define SPI_SPEED_HZ      10000000  /* 10 MHz                                */
+#define TIMER_INTERVAL_MS 0.05      /* fire every 50MICRO ms (20 kHz)            */
 /* ─────────────────────────────────────────────────────────────────────── */
 
 /* Compile-time guard — catches any toolchain padding difference.
