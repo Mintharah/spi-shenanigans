@@ -88,7 +88,7 @@ static const controller_config_t DEFAULT_CFG = {
     .spi_bus       = 0,
     .spi_dev       = 0,
     .spi_mode      = 0,
-    .spi_clock_hz  = 4000000u,   /* informational; the QNX driver uses spi.conf */
+    .spi_clock_hz  = 1000000u,   /* DEBUG: 1 MHz to rule out F401 slave timing */
     .block_rows    = 200,
     .period_ns     = 10L * 1000L * 1000L,
     .rt_priority   = 30,
@@ -341,7 +341,18 @@ int main(void)
 
         const frame_header_t *h = (const frame_header_t *)rx;
 
-        if (h->magic   != MOTOR_FRAME_MAGIC)        { st.magic_err++;   continue; }
+        if (h->magic != MOTOR_FRAME_MAGIC) {
+            /* DEBUG: dump the first 16 received bytes ~once per second so we can
+             * tell a dead line (all 0xFF / all 0x00) from real-but-misframed
+             * data. Remove once frames are flowing. */
+            if ((st.magic_err % 500u) == 0u) {
+                fprintf(stderr, "[ctrl] magic miss; rx[0..15]=");
+                for (int i = 0; i < 16; ++i) fprintf(stderr, " %02x", rx[i]);
+                fprintf(stderr, "  (want magic=%08x)\n", (unsigned)MOTOR_FRAME_MAGIC);
+            }
+            st.magic_err++;
+            continue;
+        }
         if (h->version != MOTOR_CONTRACT_VERSION)   { st.version_err++; continue; }
         if (h->n_rows == 0 || h->n_rows != cfg.block_rows) { st.size_err++; continue; }
 
