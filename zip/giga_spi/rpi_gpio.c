@@ -18,6 +18,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <sys/neutrino.h>
 #include <sys/rpi_gpio.h>
 #include "rpi_gpio.h"
@@ -26,7 +27,7 @@
 static int gpio_fd = -1;
 
 // Mutex protecting the GPIO message file descriptor
-static pthread_mutex_t gpio_fd_mutex;
+static pthread_mutex_t gpio_fd_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // Connect to the GPIO resource manager
 static int gpio_msg_connect()

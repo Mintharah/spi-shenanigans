@@ -2,9 +2,9 @@
  * motor_controller.c
  * ----------------------------------------------------------------------------
  * QNX controller / producer node for the predictive-maintenance pipeline.
- * INTERRUPT-ONLY build: reads are driven solely by the data-ready GPIO edge, so
- * every read lands on a fresh, complete frame (no free-running poll => no clock
- * drift, no duplicate/gap churn from being unsynced to the STM32).
+ * INTERRUPT-DRIVEN build: reads are driven by the data-ready GPIO edge, so every
+ * read lands on a fresh, complete frame (no free-running poll => no clock drift,
+ * no duplicate/gap churn from being unsynced to the STM32).
  *
  * Single SCHED_FIFO thread that, per data-ready interrupt:
  *   1. reads one fixed-size frame over SPI (rpi_spi driver),
@@ -18,12 +18,27 @@
  * (line already/still high) -- it can never deadlock waiting for an edge that
  * already happened. A low line simply means idle.
  *
- * Data-ready uses the rpi_gpio resource manager: we register a rising-edge event
- * on the data-ready pin and also poll its level via rpi_gpio_input(). The server
- * owns the RP1 GPIO interrupt; no raw IRQ vector and no RP1 register access here.
+ * GPIO ACCESS POLICY -- IMPORTANT:
+ *   All GPIO access goes through the rpi_gpio resource manager (the client API
+ *   in rpi_gpio.c / rpi_gpio.h). The server owns the RP1 hardware; this process
+ *   does NOT map or poke RP1 registers directly. A previous revision tried to
+ *   bypass the server with hard-coded MAP_PHYS pokes at 0x400d0000 / 0x400e0000
+ *   to "force" a pull-down and read a "live" pad level. Those addresses and the
+ *   pull bit-encoding were wrong for the Pi 5 / RP1 (io_bank0 is at 0x400d0000,
+ *   the pad/pull block is elsewhere, and RP1 uses separate PDE/PUE enable bits,
+ *   not a 2-bit field). The result was that the pull-down never landed (the pin
+ *   stayed pulled UP) and the bogus "live level" read never went high, so the
+ *   controller never accepted a single frame (ok stayed at 0). The fix is to use
+ *   the supported server API for the pull and the level, which is what this file
+ *   now does.
+ *
+ *   Idle/disconnected rejection is handled the correct way: an internal
+ *   pull-DOWN requested through the server, plus -- strongly recommended -- an
+ *   external 10 kOhm pull-down between the data-ready GPIO and GND on the header.
  *
  * Build (QNX): libc only -- do NOT link -lrt or -lpthread. Compile as C11.
- *   qcc -V<target> -std=gnu11 -O2 motor_controller.c rpi_gpio.c -lrpi_spi -o motor_controller
+ *   qcc -V<target> -std=gnu11 -O2 motor_controller.c rpi_gpio.c rpi_spi.c \
+ *       -lrpi_spi -o motor_controller
  *   (rpi_gpio.c + rpi_gpio.h: the client API from the hardware-component-samples repo)
  * Requires root to raise SCHED_FIFO priority. The rpi_gpio resource manager must
  * already be running (stock image: /dev/gpio is present).
@@ -73,7 +88,7 @@ static const controller_config_t DEFAULT_CFG = {
     .spi_bus       = 0,
     .spi_dev       = 0,
     .spi_mode      = 0,
-    .spi_clock_hz  = 10000000u,
+    .spi_clock_hz  = 1000000u,   /* DEBUG: 1 MHz to rule out F401 slave timing */
     .block_rows    = 200,
     .period_ns     = 10L * 1000L * 1000L,
     .rt_priority   = 30,
@@ -92,10 +107,12 @@ typedef struct {
     uint64_t resets;
     uint64_t timeouts;
     uint64_t spi_err;
-    uint64_t floating_pin;  /* FIX: reads suppressed because pin looked high with no STM32 */
 } controller_stats_t;
 
 /* ============================ CRC ========================================= */
+/* CRC-32/MPEG-2: init 0xFFFFFFFF, poly 0x04C11DB7, MSB-first, no reflection,
+ * no final XOR. Byte-for-byte identical to the STM32 table-driven crc32_mpeg2()
+ * in motor_send.c (verified). Both sides MUST stay in lockstep. */
 static uint32_t frame_crc_compute(const uint8_t *data, size_t len)
 {
     uint32_t crc = 0xFFFFFFFFu;
@@ -134,149 +151,26 @@ static shm_region_t *shm_setup(void)
 enum { WR_OK, WR_TIMEOUT, WR_ERROR };
 
 #define DR_EVENT_ID    1
-#define DR_PULSE_CODE  _PULSE_CODE_MINAVAIL
-
-/*
- * RP1 GPIO live level registers (Pi 5).
- * GPIO_STATUS for pin N is at GPIO_BASE + N*8 bytes.
- * Bit 9 (INFROMPAD) is the live pad sample -- always current, never cached.
- * This bypasses rpi_gpio_input() which returns stale server-side state.
- */
-#define RP1_GPIO_BASE          0x400e0000u
-#define RP1_GPIO_MAP_SIZE      0x1000u
-#define RP1_GPIO_STATUS_STRIDE 2u          /* uint32_t words per pin (STATUS+CTRL) */
-#define RP1_GPIO_INFROMPAD_BIT 9u
-
-/*
- * FIX: How many consecutive GPIO_HIGH samples we must see before trusting
- * the pin is genuinely driven by the STM32.
- *
- * A floating Pi header pin latches high through parasitic capacitance from
- * adjacent driven lines and holds that level stably -- 100 µs confirmation
- * was not enough to distinguish it from a real signal.
- *
- * The STM32 holds DR high for the ENTIRE SPI transfer window.  At 10 MHz SCK
- * with 200 rows the frame is ~3,200 bytes = ~2.56 ms on the wire, plus the
- * DMA-priming guard on the STM32 side.  DR is therefore high for at least
- * 3 ms from the Pi's perspective.
- *
- * A floating pin, with no driver, will bleed off through any real load
- * (oscilloscope probe, the rpi_gpio input buffer, stray PCB resistance) within
- * 1-2 ms.  By waiting 3 × 2 ms = 6 ms total across 3 samples we guarantee:
- *   - Real signal  : still high on all 3 samples (held by the STM32 output)
- *   - Floating pin : has bled low by sample 2 or 3
- *
- * NOTE: wire a 10 kΩ pull-down between GPIO17 and GND on the header.
- * The software guard is a belt; the resistor is the braces.
- */
-#define DR_CONFIRM_COUNT      3                        /* FIX: was 2 */
-#define DR_CONFIRM_DELAY_NS   2000000ul                /* FIX: 2 ms between checks (was 100 µs) */
 
 typedef struct {
-    int                pin;
-    int                chid;
-    int                coid;
-    uint64_t           poll_ns;
-    volatile uint32_t *gpio_base;   /* MAP_PHYS mapping of RP1 GPIO block */
+    int      pin;
+    int      chid;
+    int      coid;
+    uint64_t poll_ns;
 } dataready_t;
 
-/* FIX: small busy-wait used between confirmation samples */
-static void nsleep(uint64_t ns)                       /* FIX */
-{                                                     /* FIX */
-    struct timespec ts = {                            /* FIX */
-        .tv_sec  = (time_t)(ns / 1000000000ul),       /* FIX */
-        .tv_nsec = (long)  (ns % 1000000000ul),       /* FIX */
-    };                                                /* FIX */
-    nanosleep(&ts, NULL);                             /* FIX */
-}                                                     /* FIX */
-
 /*
- * FIX: Confirm the pin is genuinely high by sampling it DR_CONFIRM_COUNT times
- * with DR_CONFIRM_DELAY_NS between each sample.
- *
- * Floating pin:        bleeds low within ~1-2 ms with no active driver;
- *                      will fail by sample 2 or 3 (6 ms total window).
- * STM32-driven signal: held high by a push-pull output for the full transfer
- *                      window (~3+ ms); passes all 3 samples trivially.
- *
- * Returns 1 only if ALL samples read GPIO_HIGH.
- */
-/*
- * Read the live GPIO input level directly from the RP1 GPIO_STATUS register
- * (bit 9 = INFROMPAD).  This is the raw pad sample -- never cached, never
- * stale, independent of the rpi_gpio server's internal state tracking.
- *
- * rpi_gpio_input() on this BSP returns the server's cached value which
- * reflects the last edge event, not the current pad voltage.  With pull-down
- * active and no STM32 driving the line, the pad is at 0 V but rpi_gpio_input
- * returns HIGH because the server latched the level from event registration.
+ * Read the current data-ready level through the rpi_gpio resource manager.
+ * RPI_GPIO_READ returns the live hardware level, so this reflects the actual
+ * pad voltage; there is no need (and no correct way from user space here) to
+ * touch RP1 registers directly. Returns 1 for high, 0 for low/error.
  */
 static int dataready_read_level(dataready_t *d)
 {
-    uint32_t status = d->gpio_base[d->pin * RP1_GPIO_STATUS_STRIDE];
-    return (int)((status >> RP1_GPIO_INFROMPAD_BIT) & 1u);
-}
-
-static int dataready_pin_is_stable_high(dataready_t *d)
-{
-    for (int i = 0; i < DR_CONFIRM_COUNT; ++i) {
-        if (i > 0) nsleep(DR_CONFIRM_DELAY_NS);
-        if (dataready_read_level(d) != 1)
-            return 0;
-    }
-    return 1;
-}
-
-/*
- * force_pad_pulldown_rp1()
- * ------------------------
- * The rpi_gpio resource manager calls rpi_gpio_setup() which resets the RP1
- * pad to its BSP default -- pull-UP on GPIO17 on this image.  The subsequent
- * rpi_gpio_setup_pull(..., GPIO_PUD_DOWN) call returns GPIO_SUCCESS but does
- * not actually write the RP1 pad control register, so the pin stays pull-UP
- * and floats high when the STM32 is not driving it.
- *
- * This function bypasses the server entirely and writes the RP1 GPIO pad
- * control register directly via /dev/mem, overriding whatever the BSP set.
- * It must be called AFTER rpi_gpio_setup() so it wins the race.
- *
- * RP1 pad control layout (Pi 5):
- *   Base:          0x400d0000
- *   Register size: 4 bytes per GPIO pin
- *   Bits [4:3]:    00 = no pull, 01 = pull-up, 10 = pull-down
- */
-static int force_pad_pulldown_rp1(int gpio_pin)
-{
-    /* QNX has no /dev/mem -- use MAP_PHYS to access physical registers directly. */
-    const off_t  PAD_BASE = 0x400d0000;
-    const size_t MAP_SIZE = 0x100;
-
-    volatile uint32_t *base = mmap(NULL, MAP_SIZE,
-                                   PROT_READ | PROT_WRITE | PROT_NOCACHE,
-                                   MAP_SHARED | MAP_PHYS,
-                                   NOFD, PAD_BASE);
-    if (base == MAP_FAILED) {
-        fprintf(stderr, "force_pad_pulldown: mmap MAP_PHYS: %s\n", strerror(errno));
-        return -1;
-    }
-
-    uint32_t val = base[gpio_pin];
-    val &= ~(0x3u << 3);   /* clear bits [4:3] */
-    val |=  (0x2u << 3);   /* 0b10 = pull-down */
-    base[gpio_pin] = val;
-
-    uint32_t readback = base[gpio_pin];
-    munmap((void *)base, MAP_SIZE);
-
-    if (((readback >> 3) & 0x3u) != 0x2u) {
-        fprintf(stderr, "force_pad_pulldown: GPIO%d readback 0x%08" PRIx32
-                        " -- pull-down did NOT land\n", gpio_pin, readback);
-        return -1;
-    }
-
-    fprintf(stderr, "[ctrl] GPIO%d pad forced to pull-down "
-                    "(reg=0x%08" PRIx32 ")\n", gpio_pin, readback);
-    return 0;
+    unsigned level = GPIO_LOW;
+    if (rpi_gpio_input(d->pin, &level) != GPIO_SUCCESS)
+        return 0;
+    return (level == GPIO_HIGH) ? 1 : 0;
 }
 
 static int dataready_init(dataready_t *d, const controller_config_t *cfg)
@@ -284,7 +178,7 @@ static int dataready_init(dataready_t *d, const controller_config_t *cfg)
     d->pin     = cfg->dataready_pin;
     d->chid    = -1;
     d->coid    = -1;
-    d->poll_ns = 2u * 1000u * 1000u;
+    d->poll_ns = 2u * 1000u * 1000u;   /* 2 ms safety poll; the edge is the fast path */
 
     d->chid = ChannelCreate(0);
     if (d->chid == -1) {
@@ -297,26 +191,16 @@ static int dataready_init(dataready_t *d, const controller_config_t *cfg)
         return -1;
     }
 
-    /* Map RP1 GPIO status registers for direct live-level reads */
-    d->gpio_base = mmap(NULL, RP1_GPIO_MAP_SIZE,
-                        PROT_READ | PROT_NOCACHE,
-                        MAP_SHARED | MAP_PHYS,
-                        NOFD, (off_t)RP1_GPIO_BASE);
-    if (d->gpio_base == MAP_FAILED) {
-        fprintf(stderr, "error: mmap RP1 GPIO block: %s\n", strerror(errno));
-        return -1;
-    }
-
+    /* Configure the pin as an input (through the server). */
     if (rpi_gpio_setup(d->pin, GPIO_IN) != GPIO_SUCCESS) {
         fprintf(stderr, "error: rpi_gpio_setup(pin=%d) failed\n", d->pin);
-        munmap((void *)d->gpio_base, RP1_GPIO_MAP_SIZE);
         return -1;
     }
 
     /*
-     * Arm the edge detector FIRST -- rpi_gpio_add_event_detect() touches the
-     * pad registers internally and resets the pull to the BSP default (UP).
-     * force_pad_pulldown_rp1() must come AFTER so it is the last writer.
+     * Arm the rising-edge detector. add_event_detect may re-touch the pad and
+     * leave the pull at the BSP default, so we set the pull AFTER it, making the
+     * pull-down request the last writer to the pad.
      */
     if (rpi_gpio_add_event_detect(d->pin, d->coid, GPIO_RISING, DR_EVENT_ID)
             != GPIO_SUCCESS) {
@@ -324,21 +208,23 @@ static int dataready_init(dataready_t *d, const controller_config_t *cfg)
         return -1;
     }
 
-    /* Now override the pull -- nothing touches the pad after this point. */
-    if (force_pad_pulldown_rp1(d->pin) != 0) {
-        fprintf(stderr, "error: could not force pull-down on GPIO%d -- "
-                        "spurious reads likely\n", d->pin);
+    /*
+     * Request an internal pull-DOWN through the server so a disconnected/idle
+     * data-ready line reads low instead of floating high. This is the supported
+     * path; combine with an external 10 kOhm pull-down on the header for a line
+     * that is reliably low when the STM32 is not driving it.
+     */
+    if (rpi_gpio_setup_pull(d->pin, GPIO_IN, GPIO_PUD_DOWN) != GPIO_SUCCESS) {
+        fprintf(stderr, "warning: rpi_gpio_setup_pull(pin=%d, DOWN) failed -- "
+                        "fit an external pull-down resistor\n", d->pin);
     }
 
-    /* Sanity check: live pad level must be low with no STM32 connected. */
-    {
-        if (dataready_read_level(d) == 1) {
-            fprintf(stderr, "WARNING: GPIO%d INFROMPAD still HIGH after "
-                    "forcing pull-down -- check wiring\n", d->pin);
-        } else {
-            fprintf(stderr, "[ctrl] GPIO%d confirmed low (pull-down active)\n",
-                    d->pin);
-        }
+    /* Sanity check: with no STM32 driving it, the line should read low now. */
+    if (dataready_read_level(d) == 1) {
+        fprintf(stderr, "WARNING: GPIO%d reads HIGH at startup -- check wiring / "
+                        "pull-down (spurious reads possible)\n", d->pin);
+    } else {
+        fprintf(stderr, "[ctrl] GPIO%d idle level low (pull-down active)\n", d->pin);
     }
 
     return 0;
@@ -346,34 +232,25 @@ static int dataready_init(dataready_t *d, const controller_config_t *cfg)
 
 static int dataready_wait(dataready_t *d, controller_stats_t *st)
 {
+    (void)st;
     uint64_t to = d->poll_ns;
     struct _pulse pulse;
+
+    /* Block for a rising-edge pulse, but never longer than poll_ns so a missed
+     * edge (line already high) is still picked up by the level re-check below. */
     TimerTimeout(CLOCK_MONOTONIC, _NTO_TIMEOUT_RECEIVE, NULL, &to, NULL);
     int rc = MsgReceivePulse(d->chid, &pulse, sizeof pulse, NULL);
     if (rc == -1 && errno != ETIMEDOUT)
         return WR_ERROR;
 
     /*
-     * FIX: First quick sample -- if pin is low right now, bail immediately
-     * without paying the 2 × 2 ms confirmation cost on every idle poll.
+     * Authoritative decision is the LEVEL, not the edge. The STM32 holds the
+     * data-ready line high for the entire SPI transfer window (it only drops it
+     * from the transfer-complete ISR, after the Pi has clocked the whole frame),
+     * so a single live read is sufficient and correct: high => a frame is
+     * waiting, read it now; low => idle.
      */
-    {                                                        /* FIX */
-        unsigned level = GPIO_LOW;                           /* FIX */
-        if (rpi_gpio_input(d->pin, &level) != GPIO_SUCCESS  /* FIX */
-                || level != GPIO_HIGH)                       /* FIX */
-            return WR_TIMEOUT;                               /* FIX */
-    }                                                        /* FIX */
-
-    /*
-     * FIX: Pin read high on the first sample.  Run the full stable-high
-     * confirmation (3 samples × 2 ms apart).  If it fails, the pin is
-     * floating -- count it and return TIMEOUT so the main loop ignores it.
-     */
-    if (dataready_pin_is_stable_high(d))   /* FIX */
-        return WR_OK;
-
-    st->floating_pin++;   /* FIX: pin was high once but didn't hold -- float */ /* FIX */
-    return WR_TIMEOUT;
+    return dataready_read_level(d) ? WR_OK : WR_TIMEOUT;
 }
 
 static void dataready_cleanup(dataready_t *d)
@@ -381,8 +258,6 @@ static void dataready_cleanup(dataready_t *d)
     rpi_gpio_cleanup();
     if (d->coid != -1) ConnectDetach(d->coid);
     if (d->chid != -1) ChannelDestroy(d->chid);
-    if (d->gpio_base && d->gpio_base != MAP_FAILED)
-        munmap((void *)d->gpio_base, RP1_GPIO_MAP_SIZE);
 }
 
 /* ============================ shutdown ==================================== */
@@ -411,6 +286,7 @@ int main(void)
 
     dataready_t dr;
     if (dataready_init(&dr, &cfg) != 0) {
+        dataready_cleanup(&dr);
         rpi_spi_cleanup_device(cfg.spi_bus, cfg.spi_dev);
         munmap(region, sizeof(shm_region_t));
         shm_unlink(MOTOR_SHM_NAME);
@@ -447,10 +323,10 @@ int main(void)
                 "[ctrl] ok=%" PRIu64 " drops=%" PRIu64 " crc=%" PRIu64
                 " magic=%" PRIu64 " ver=%" PRIu64 " size=%" PRIu64
                 " dup=%" PRIu64 " rst=%" PRIu64 " to=%" PRIu64
-                " spi=%" PRIu64 " float=%" PRIu64 "\n",   /* FIX: added float= */
+                " spi=%" PRIu64 "\n",
                 st.frames_ok, st.seq_drops, st.crc_err, st.magic_err,
                 st.version_err, st.size_err, st.duplicates, st.resets,
-                st.timeouts, st.spi_err, st.floating_pin);
+                st.timeouts, st.spi_err);
         }
 
         int w = dataready_wait(&dr, &st);
@@ -465,7 +341,18 @@ int main(void)
 
         const frame_header_t *h = (const frame_header_t *)rx;
 
-        if (h->magic   != MOTOR_FRAME_MAGIC)        { st.magic_err++;   continue; }
+        if (h->magic != MOTOR_FRAME_MAGIC) {
+            /* DEBUG: dump the first 16 received bytes ~once per second so we can
+             * tell a dead line (all 0xFF / all 0x00) from real-but-misframed
+             * data. Remove once frames are flowing. */
+            if ((st.magic_err % 500u) == 0u) {
+                fprintf(stderr, "[ctrl] magic miss; rx[0..15]=");
+                for (int i = 0; i < 16; ++i) fprintf(stderr, " %02x", rx[i]);
+                fprintf(stderr, "  (want magic=%08x)\n", (unsigned)MOTOR_FRAME_MAGIC);
+            }
+            st.magic_err++;
+            continue;
+        }
         if (h->version != MOTOR_CONTRACT_VERSION)   { st.version_err++; continue; }
         if (h->n_rows == 0 || h->n_rows != cfg.block_rows) { st.size_err++; continue; }
 

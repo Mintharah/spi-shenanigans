@@ -7,7 +7,10 @@ Active source path : motor_synth (20 kHz sine, no sensors needed)
 Wire contract      : motor_wire.h  (v2: row = current, vib_x/y/z, rpm = 10 bytes)
 
 Pins (SPI2 slave, mode 0, MSB-first):
-  PB12 NSS   PB13 SCK   PB14 MISO   PB15 MOSI
+  PB12 NSS   
+  PB13 SCK   
+  PB14 MISO   
+  PB15 MOSI
   PB0  -> Pi GPIO   (data-ready, rising edge = "frame waiting")
   GND  -> Pi GND    (common ground required)
 

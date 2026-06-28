@@ -1,24 +1,25 @@
 /*
- * motor_synth.c  (timer-interrupt version, instrumented)
+ * motor_synth.c  (timer-interrupt version, instrumented + runtime-reconfig)
  * ----------------------------------------------------------------------------
  * Synthetic data source for sensor-free bring-up. Produces one block of sine
- * samples every ~10 ms (100 Hz block cadence -- the same rate the real 20 kHz /
- * 200-row path yields) and hands it to motor_on_block_ready().
+ * samples every block_period_us microseconds (default 10000 us = 100 Hz block
+ * cadence) and hands it to motor_on_block_ready().
  *
  * Why a timer INTERRUPT, not timer-triggered DMA: the earlier TIM2_UP -> DMA
  * approach never delivered transfers (the update-DMA request never advanced the
  * stream), so no callback ever fired. A periodic TIM update interrupt is the
  * most reliable STM32 mechanism and exercises the entire downstream path (frame
- * assembly, SPI2-slave DMA, the PB0 handshake, the whole Pi side) identically --
- * the only thing it doesn't model is per-sample ADC DMA, which is motor_acquire's
- * job later. For pushing frames to the Pi, the block cadence is what matters.
+ * assembly, SPI2-slave DMA, the PB0 handshake, the whole Pi side) identically.
  *
- * A precomputed sine table (2*block_rows) is fed half-at-a-time, alternating each
- * block, so `current` traces a continuous sine across blocks on the monitor.
+ * A precomputed sine table (2*block_rows) is fed half-at-a-time, alternating
+ * each block, so `current` traces a continuous sine across blocks on the
+ * monitor.
  *
- * g_synth_cb bumps every block (read by the diagnostic main.c): if it never
- * changes, the timer interrupt isn't firing.
+ * Runtime reconfig: motor_synth_set_block_rows() / set_synth_cycles() rebuild
+ * the pattern; set_period_us() reprograms TIM2's prescaler+period. All three
+ * must be called with the synth STOPPED (no TIM2 IRQ in flight).
  *
+ * g_synth_cb bumps every block (read by the diagnostic main.c).
  * Owns TIM2. Use EITHER this OR motor_acquire.c, never both.
  * ----------------------------------------------------------------------------
  */
@@ -26,6 +27,7 @@
 #include <math.h>
 #include "motor_wire.h"
 #include "motor_source.h"
+#include "motor_synth.h"
 
 extern void Error_Handler(void);
 
@@ -35,41 +37,70 @@ extern void Error_Handler(void);
 #ifndef MOTOR_DEFAULT_BLOCK_ROWS
 #define MOTOR_DEFAULT_BLOCK_ROWS  200u
 #endif
-#ifndef SYNTH_CYCLES
-#define SYNTH_CYCLES  4u
+#ifndef SYNTH_DEFAULT_CYCLES
+#define SYNTH_DEFAULT_CYCLES  4u
 #endif
+#ifndef SYNTH_DEFAULT_PERIOD_US
+#define SYNTH_DEFAULT_PERIOD_US  10000u    /* 100 Hz block cadence */
+#endif
+
+/* TIM2 input clock on F401 is 84 MHz (APB1 timers x2). */
+#define TIM2_CLOCK_HZ  84000000u
 
 /* ---- module state -------------------------------------------------------- */
 static TIM_HandleTypeDef s_htim2;
 
-static uint16_t s_block_rows = MOTOR_DEFAULT_BLOCK_ROWS;
-static uint16_t s_pattern[2u * MOTOR_MAX_ROWS_PER_BLOCK];   /* sine table */
-static volatile uint8_t s_half = 0;                          /* which half to send */
+static uint16_t s_block_rows   = MOTOR_DEFAULT_BLOCK_ROWS;
+static uint16_t s_synth_cycles = SYNTH_DEFAULT_CYCLES;
+static uint16_t s_pattern[2u * MOTOR_MAX_ROWS_PER_BLOCK];
+static volatile uint8_t s_half = 0;
 
-volatile uint32_t g_synth_cb = 0;   /* diagnostic: blocks produced */
+volatile uint32_t g_synth_cb = 0;
 
 /* ---- pattern ------------------------------------------------------------- */
-static void build_pattern(uint16_t rows)
+static void build_pattern(uint16_t rows, uint16_t cycles)
 {
     uint32_t len = (uint32_t)rows * 2u;
     for (uint32_t i = 0; i < len; ++i) {
-        float ph = 2.0f * (float)M_PI * (float)SYNTH_CYCLES * (float)i / (float)len;
+        float ph = 2.0f * (float)M_PI * (float)cycles * (float)i / (float)len;
         s_pattern[i] = (uint16_t)(2048.0f + 1800.0f * sinf(ph));
     }
 }
 
-/* ---- init ---------------------------------------------------------------- */
-static void tim2_init(void)
+/* ---- TIM2 program -------------------------------------------------------- */
+/* Pick a (prescaler, period) pair that gives the requested microsecond
+ * cadence with a 16-bit period. Strategy: choose the smallest prescaler such
+ * that the period counter fits in 16 bits.                                   */
+static void tim2_program(uint32_t period_us)
 {
-    __HAL_RCC_TIM2_CLK_ENABLE();
-    s_htim2.Instance               = TIM2;
-    /* TIM2 clock = 84 MHz. 84e6 / (8400 * 100) = 100 Hz block cadence. */
-    s_htim2.Init.Prescaler         = 8399;
+    if (period_us == 0) period_us = SYNTH_DEFAULT_PERIOD_US;
+
+    /* total ticks at 84 MHz: */
+    uint64_t total = (uint64_t)TIM2_CLOCK_HZ * period_us / 1000000ull;
+    if (total == 0) total = 1;
+
+    uint32_t presc = 1;
+    while ((total + presc - 1) / presc > 0x10000u) {
+        presc <<= 1;
+        if (presc > 0x10000u) { presc = 0x10000u; break; }
+    }
+    uint32_t arr = (uint32_t)((total + presc - 1) / presc);
+    if (arr == 0) arr = 1;
+    if (arr > 0x10000u) arr = 0x10000u;
+
+    s_htim2.Init.Prescaler         = (uint32_t)(presc - 1u);
     s_htim2.Init.CounterMode       = TIM_COUNTERMODE_UP;
-    s_htim2.Init.Period            = 99;
+    s_htim2.Init.Period            = (uint32_t)(arr - 1u);
     s_htim2.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;
     s_htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
     if (HAL_TIM_Base_Init(&s_htim2) != HAL_OK) Error_Handler();
+}
+
+static void tim2_init(uint32_t period_us)
+{
+    __HAL_RCC_TIM2_CLK_ENABLE();
+    s_htim2.Instance = TIM2;
+    tim2_program(period_us);
 
     /* Producer runs in this ISR; keep it at the same priority as the SPI/DMA
      * completion ISRs so they never preempt each other and corrupt the
@@ -78,14 +109,16 @@ static void tim2_init(void)
     HAL_NVIC_EnableIRQ(TIM2_IRQn);
 }
 
+/* ---- public ------------------------------------------------------------- */
 void motor_synth_init(uint16_t block_rows)
 {
     if (block_rows == 0 || block_rows > MOTOR_MAX_ROWS_PER_BLOCK)
         block_rows = MOTOR_DEFAULT_BLOCK_ROWS;
-    s_block_rows = block_rows;
+    s_block_rows   = block_rows;
+    s_synth_cycles = SYNTH_DEFAULT_CYCLES;
 
-    build_pattern(s_block_rows);
-    tim2_init();
+    build_pattern(s_block_rows, s_synth_cycles);
+    tim2_init(SYNTH_DEFAULT_PERIOD_US);
 }
 
 void motor_synth_start(void)
@@ -100,6 +133,27 @@ void motor_synth_stop(void)
     HAL_TIM_Base_Stop_IT(&s_htim2);
 }
 
+void motor_synth_set_block_rows(uint16_t block_rows)
+{
+    if (block_rows == 0 || block_rows > MOTOR_MAX_ROWS_PER_BLOCK) return;
+    s_block_rows = block_rows;
+    s_half = 0;
+    build_pattern(s_block_rows, s_synth_cycles);
+}
+
+void motor_synth_set_synth_cycles(uint16_t synth_cycles)
+{
+    if (synth_cycles == 0 || synth_cycles > 64) return;
+    s_synth_cycles = synth_cycles;
+    build_pattern(s_block_rows, s_synth_cycles);
+}
+
+void motor_synth_set_period_us(uint32_t period_us)
+{
+    if (period_us == 0) return;       /* "leave alone" sentinel */
+    tim2_program(period_us);
+}
+
 /* ---- timer update callback (block cadence) ------------------------------- */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
@@ -107,11 +161,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
     g_synth_cb++;
     const uint16_t *block = &s_pattern[(uint32_t)s_half * s_block_rows];
-    s_half ^= 1u;                              /* alternate halves -> moving sine */
-    motor_on_block_ready(block, s_block_rows); /* runs the send side */
+    s_half ^= 1u;
+    motor_on_block_ready(block, s_block_rows);
 }
 
-/* ---- ISR plumbing -------------------------------------------------------- */
 void TIM2_IRQHandler(void)
 {
     HAL_TIM_IRQHandler(&s_htim2);

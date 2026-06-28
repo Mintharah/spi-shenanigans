@@ -1,16 +1,34 @@
 /*
- * motor_send.c  (instrumented)
+ * motor_send.c  (instrumented + SET_CONFIG/ACK)
  * ----------------------------------------------------------------------------
  * STM32 send side. Implements motor_on_block_ready(): each block becomes a wire
  * frame [ frame_header | rows | CRC ] in a double buffer, shipped to the Pi as an
  * SPI2 slave (full-duplex DMA) with a data-ready GPIO handshake.
  *
- * Diagnostic counters (read by the diagnostic main.c) are added; they have no
- * effect on behaviour. Remove them once bring-up is done.
- *
  *   SPI2 slave:  PB12 NSS, PB13 SCK, PB14 MISO, PB15 MOSI  (AF5), mode 0, MSB-first
  *   data-ready:  PB0 (output, high = frame waiting)
- *   DMA1 Stream4 Ch0 = SPI2_TX, DMA1 Stream3 Ch0 = SPI2_RX (dummy)
+ *   DMA1 Stream4 Ch0 = SPI2_TX, DMA1 Stream3 Ch0 = SPI2_RX (carries Pi -> STM cmds)
+ *
+ * SET_CONFIG / ACK protocol (Pi -> STM, ACK in next outbound frame header):
+ *
+ *   1. After every TxRxCplt, sniff the first 4 bytes of s_rx_dummy. If they
+ *      look like MOTOR_CMD_MAGIC, copy MOTOR_CMD_FRAME_BYTES into a small
+ *      pending buffer and set s_cmd_pending. CRC validation is deferred.
+ *
+ *   2. motor_on_block_ready first assembles & arms the CURRENT frame using
+ *      the CURRENT config (so the in-flight transfer never sees a partial
+ *      update). THEN it processes the pending command:
+ *         - bad CRC / unknown cmd / unsupported schema / out-of-range value
+ *           -> NACK bits latched, no apply.
+ *         - duplicate cmd_seq (Pi re-sent because it missed the ACK)
+ *           -> re-latch ACK, no re-apply.
+ *         - valid SET_CONFIG -> apply now (synth + motor_send update their
+ *           block_rows), latch ACK_OK + CONFIG_APPLIED for the NEXT frame.
+ *
+ *   3. assemble_frame stamps frame_header_t.flags with the latched ACK/NACK
+ *      bits and writes the low 16 bits of the most recent cmd_seq into
+ *      _reserved. CONFIG_APPLIED is a one-shot: cleared after one frame.
+ *      Everything else is sticky until a new command arrives.
  * ----------------------------------------------------------------------------
  */
 #include "stm32f4xx_hal.h"
@@ -18,6 +36,7 @@
 #include "motor_wire.h"
 #include "motor_source.h"   /* motor_on_block_ready() -- we implement it */
 #include "motor_send.h"
+#include "motor_synth.h"    /* runtime reconfig of the synth source     */
 
 extern void Error_Handler(void);
 
@@ -29,24 +48,20 @@ extern void Error_Handler(void);
 #define DR_PORT            GPIOB
 #define DR_PIN             GPIO_PIN_0
 
-/*
- * FIX: How many APB1 cycles to busy-wait after HAL_SPI_TransmitReceive_DMA
- * returns before asserting PB0.  SPI2 is on APB1 (max 42 MHz on F4).
- * The DMA needs ~4 AHB cycles to load the first word into the TX FIFO.
- * Waiting 8 APB1 NOPs is more than enough and costs < 200 ns at 42 MHz.
- * Increase if the Pi still wins the race at very high SCK rates.
- */
 #ifndef MOTOR_DR_ASSERT_DELAY_CYCLES
 #define MOTOR_DR_ASSERT_DELAY_CYCLES  8u
 #endif
 
 /* ---- diagnostic counters (read by main.c) -------------------------------- */
-volatile uint32_t g_obr        = 0;   /* motor_on_block_ready entered        */
-volatile uint32_t g_arm_called = 0;   /* arm_tx entered                      */
-volatile uint32_t g_arm_ok     = 0;   /* PB0 raised (DMA armed OK)           */
-volatile uint32_t g_arm_fail   = 0;   /* HAL_SPI_TransmitReceive_DMA failed  */
-volatile uint32_t g_sent       = 0;   /* SPI transfer completed (TxRxCplt)   */
-volatile uint32_t g_spi_err    = 0;   /* SPI error (OVR/glitch) -> aborted + re-armed */
+volatile uint32_t g_obr        = 0;
+volatile uint32_t g_arm_called = 0;
+volatile uint32_t g_arm_ok     = 0;
+volatile uint32_t g_arm_fail   = 0;
+volatile uint32_t g_sent       = 0;
+volatile uint32_t g_spi_err    = 0;
+volatile uint32_t g_cmd_seen   = 0;   /* commands sniffed in rx (post-CRC TBD)  */
+volatile uint32_t g_cmd_ok     = 0;   /* SET_CONFIG applied                     */
+volatile uint32_t g_cmd_nack   = 0;   /* SET_CONFIG rejected                    */
 
 /* ---- state --------------------------------------------------------------- */
 static SPI_HandleTypeDef s_hspi2;
@@ -57,14 +72,34 @@ static uint16_t s_block_rows = MOTOR_DEFAULT_BLOCK_ROWS;
 static uint16_t s_frame_len  = 0;
 static uint32_t s_seq        = 0;
 
-static _Alignas(8) uint8_t s_frame[2][MOTOR_MAX_FRAME_BYTES]; /* double buffer  */
-static _Alignas(8) uint8_t s_rx_dummy[MOTOR_MAX_FRAME_BYTES]; /* master's bytes, ignored */
+/* The Pi clocks MOTOR_MAX_FRAME_BYTES every transfer (worst-case sizing).
+ * We size BOTH the tx frames and the rx buffer to MAX. Only the first
+ * s_frame_len bytes are meaningful in tx; everything beyond is whatever
+ * the buffer happened to contain (the Pi ignores it anyway, frame size
+ * is in the header).                                                       */
+static _Alignas(8) uint8_t s_frame[2][MOTOR_MAX_FRAME_BYTES];
+static _Alignas(8) uint8_t s_rx_dummy[MOTOR_MAX_FRAME_BYTES];
 
-static volatile int s_tx_idx  = -1;   /* buffer being clocked out, -1 = idle    */
-static volatile int s_pending = 0;    /* a newer frame waits in the other buffer */
+static volatile int s_tx_idx  = -1;
+static volatile int s_pending = 0;
 
 static volatile uint32_t s_sent    = 0;
 static volatile uint32_t s_skipped = 0;
+
+/* ---- command/ACK state --------------------------------------------------- */
+static volatile uint8_t s_cmd_pending = 0;        /* set by TxRxCplt, cleared at block boundary */
+static uint8_t s_pending_cmd[MOTOR_CMD_FRAME_BYTES];
+
+static uint16_t s_latched_ack_flags    = 0;       /* MOTOR_FLAG_ACK_* / NACK_*  */
+static uint16_t s_latched_cmd_seq      = 0;       /* low 16 bits of last cmd    */
+static uint8_t  s_config_applied_latch = 0;       /* one-shot CONFIG_APPLIED    */
+static uint16_t s_last_applied_seq     = 0xFFFFu; /* sentinel: nothing applied  */
+static uint8_t  s_have_last_applied    = 0;
+
+/* Currently-applied STM-tier config. Initialised in motor_send_init() to the
+ * compile-time defaults so process_pending_cmd can diff the incoming payload
+ * against it and skip HAL-touching set functions when nothing has changed. */
+static config_payload_t s_active_config;
 
 /* ---- CRC (table-driven CRC-32/MPEG-2) ------------------------------------ */
 static uint32_t s_crc_table[256];
@@ -97,9 +132,16 @@ static void assemble_frame(uint8_t *buf, const uint16_t *samples, uint16_t n_row
     h->seq       = seq;
     h->timestamp = (uint64_t)HAL_GetTick() * 1000ull;
     h->version   = MOTOR_CONTRACT_VERSION;
-    h->flags     = 0;
     h->n_rows    = n_rows;
-    h->_reserved = 0;
+
+    /* ACK bits: latched (sticky until next command) + CONFIG_APPLIED one-shot. */
+    uint16_t f = s_latched_ack_flags;
+    if (s_config_applied_latch) {
+        f |= MOTOR_FLAG_CONFIG_APPLIED;
+        s_config_applied_latch = 0;
+    }
+    h->flags     = f;
+    h->_reserved = s_latched_cmd_seq;
 
     int16_t  vx  = (int16_t)(180 + (int)(seq % 40));
     int16_t  vy  = (int16_t)(-150 + (int)(seq % 30));
@@ -118,71 +160,196 @@ static void assemble_frame(uint8_t *buf, const uint16_t *samples, uint16_t n_row
     size_t covered = sizeof(frame_header_t) + (size_t)n_rows * sizeof(motor_row_t);
     uint32_t crc = crc32_mpeg2(buf, covered);
     memcpy(buf + covered, &crc, sizeof crc);
+
+    /* Zero the slack out to MAX. The Pi clocks MAX bytes per transfer (so its
+     * command frame on tx can ride alongside any block size up to MAX), so we
+     * must transmit MAX bytes too -- with everything past the real frame end
+     * being deterministic zeros, not stale data from a previously-larger
+     * frame. The Pi ignores the slack (frame size comes from h->n_rows). */
+    size_t total = covered + sizeof crc;
+    if (total < MOTOR_MAX_FRAME_BYTES)
+        memset(buf + total, 0, MOTOR_MAX_FRAME_BYTES - total);
 }
 
 /* ---- transmit ------------------------------------------------------------ */
-
-/*
- * FIX: Busy-wait helper.
- * Each iteration is one NOP; the compiler cannot optimise it away because the
- * loop variable is volatile.  Used to let the DMA engine load the first word
- * into the SPI TX FIFO before we raise PB0 and invite the Pi to start clocking.
- */
 static void spin_cycles(uint32_t n)
 {
-    volatile uint32_t i = n;        /* FIX */
-    while (i--) __NOP();            /* FIX */
+    volatile uint32_t i = n;
+    while (i--) __NOP();
 }
 
 static void arm_tx(int idx)
 {
     g_arm_called++;
     s_tx_idx = idx;
+    /* Always clock MOTOR_MAX_FRAME_BYTES per transfer. The Pi is the master
+     * and clocks MAX regardless of block_rows, so we must match it or every
+     * Pi-side transfer consumes parts of the NEXT frame and looks like a
+     * massive seq-drop. The actual frame length is carried in h->n_rows; the
+     * trailing slack region is zero (cleared by assemble_frame).            */
     if (HAL_SPI_TransmitReceive_DMA(&s_hspi2, s_frame[idx], s_rx_dummy,
-                                    s_frame_len) != HAL_OK) {
+                                    MOTOR_MAX_FRAME_BYTES) != HAL_OK) {
         s_tx_idx = -1;
         s_skipped++;
         g_arm_fail++;
         return;
     }
 
-    /*
-     * FIX: Wait until the SPI peripheral's DMA request line is actually
-     * serviced (TX FIFO has at least one word) before telling the Pi the
-     * frame is ready.  Without this, PB0 rises while the FIFO is still
-     * empty; the Pi starts its transaction and reads 0x00/0xFF garbage.
-     *
-     * Belt-and-braces: also poll HAL state so we never assert DR while
-     * HAL still considers the peripheral "ready" (shouldn't happen after
-     * a successful TransmitReceive_DMA, but guards against future HAL
-     * version quirks).
-     */
-    spin_cycles(MOTOR_DR_ASSERT_DELAY_CYCLES);                  /* FIX */
+    spin_cycles(MOTOR_DR_ASSERT_DELAY_CYCLES);
 
-    /* Confirm HAL actually transitioned to BUSY before raising DR */  /* FIX */
-    uint32_t timeout = 1000u;                                          /* FIX */
-    while (HAL_SPI_GetState(&s_hspi2) != HAL_SPI_STATE_BUSY_TX_RX     /* FIX */
-           && --timeout) {                                             /* FIX */
-        __NOP();                                                       /* FIX */
-    }                                                                  /* FIX */
-    if (timeout == 0u) {                                               /* FIX */
-        /* DMA never became busy — treat as arm failure */             /* FIX */
-        HAL_SPI_DMAStop(&s_hspi2);                                     /* FIX */
-        s_tx_idx = -1;                                                 /* FIX */
-        s_skipped++;                                                   /* FIX */
-        g_arm_fail++;                                                  /* FIX */
-        return;                                                        /* FIX */
-    }                                                                  /* FIX */
+    uint32_t timeout = 1000u;
+    while (HAL_SPI_GetState(&s_hspi2) != HAL_SPI_STATE_BUSY_TX_RX
+           && --timeout) {
+        __NOP();
+    }
+    if (timeout == 0u) {
+        HAL_SPI_DMAStop(&s_hspi2);
+        s_tx_idx = -1;
+        s_skipped++;
+        g_arm_fail++;
+        return;
+    }
 
     g_arm_ok++;
-    HAL_GPIO_WritePin(DR_PORT, DR_PIN, GPIO_PIN_SET);   /* frame waiting */
+    HAL_GPIO_WritePin(DR_PORT, DR_PIN, GPIO_PIN_SET);
 }
 
+/* ---- command processing ------------------------------------------------- */
+/* All of these run from motor_on_block_ready, which is itself called from
+ * the TIM2 ISR (same NVIC priority as the SPI/DMA ISRs, so nothing here
+ * preempts and the TX in flight can't be touched mid-DMA). */
+
+static void process_pending_cmd(void)
+{
+    /* Snapshot the pending command into local space and clear the slot
+     * before we do anything else: if TxRxCplt fires a fresh command in
+     * the middle of validation (it can't preempt us, but defensive code
+     * is cheap), it'll just set the flag again and we'll see it next
+     * block.                                                              */
+    uint8_t buf[MOTOR_CMD_FRAME_BYTES];
+    memcpy(buf, s_pending_cmd, sizeof buf);
+    s_cmd_pending = 0;
+
+    const cmd_header_t *ch = (const cmd_header_t *)buf;
+
+    /* Magic was already checked in the sniff, but re-check defensively. */
+    if (ch->magic != MOTOR_CMD_MAGIC) return;
+
+    s_latched_cmd_seq = ch->cmd_seq;
+
+    /* CRC over [cmd_header_t][config_payload_t]. */
+    size_t covered = sizeof(cmd_header_t) + sizeof(config_payload_t);
+    uint32_t got;
+    memcpy(&got, buf + covered, sizeof got);
+    if (crc32_mpeg2(buf, covered) != got) {
+        s_latched_ack_flags = MOTOR_FLAG_ACK_NACK | MOTOR_FLAG_NACK_CRC;
+        g_cmd_nack++;
+        return;
+    }
+
+    /* Schema version. We only support exactly the compiled-in version for
+     * now; older fw declines newer schemas instead of misinterpreting.   */
+    if (ch->schema_version != MOTOR_CONFIG_SCHEMA_VERSION) {
+        s_latched_ack_flags = MOTOR_FLAG_ACK_NACK | MOTOR_FLAG_NACK_VER;
+        g_cmd_nack++;
+        return;
+    }
+
+    switch (ch->cmd) {
+
+    case MOTOR_CMD_PING:
+        s_latched_ack_flags = MOTOR_FLAG_ACK_OK;
+        g_cmd_ok++;
+        return;
+
+    case MOTOR_CMD_SET_CONFIG: {
+        const config_payload_t *p =
+            (const config_payload_t *)(buf + sizeof(cmd_header_t));
+
+        /* Idempotency: if we've already applied this exact cmd_seq, just
+         * re-affirm the ACK (handles Pi-side retries when its ACK was
+         * missed in transit). */
+        if (s_have_last_applied && ch->cmd_seq == s_last_applied_seq) {
+            s_latched_ack_flags = MOTOR_FLAG_ACK_OK;
+            return;
+        }
+
+        /* Range check EVERY field before we touch anything. */
+        if (p->block_rows == 0u || p->block_rows > MOTOR_MAX_ROWS_PER_BLOCK ||
+            p->synth_cycles == 0u || p->synth_cycles > 64u ||
+            p->source > MOTOR_SOURCE_ADC ||
+            p->run_state > MOTOR_RUN_RUN ||
+            p->block_period_us > 1000000u) {
+            s_latched_ack_flags = MOTOR_FLAG_ACK_NACK | MOTOR_FLAG_NACK_RANGE;
+            g_cmd_nack++;
+            return;
+        }
+
+        /* Per-field diff vs the currently-applied config. Only touch HAL for
+         * fields that actually changed. This is what makes a "push defaults at
+         * boot" SET_CONFIG cost zero -- no HAL_TIM_Base_Init from inside the
+         * TIM2 ISR, no pattern rebuild, just an ACK.                         */
+        uint8_t any_change = 0;
+
+        if (p->block_rows != s_active_config.block_rows) {
+            motor_send_set_block_rows(p->block_rows);
+            motor_synth_set_block_rows(p->block_rows);
+            any_change = 1;
+        }
+        if (p->synth_cycles != s_active_config.synth_cycles) {
+            motor_synth_set_synth_cycles(p->synth_cycles);
+            any_change = 1;
+        }
+        if (p->block_period_us != 0u &&
+            p->block_period_us != s_active_config.block_period_us) {
+            motor_synth_set_period_us(p->block_period_us);
+            any_change = 1;
+        }
+        if (p->run_state != s_active_config.run_state) {
+            if (p->run_state == MOTOR_RUN_STOP)
+                motor_synth_stop();
+            else
+                motor_synth_start();
+            any_change = 1;
+        }
+        /* source: still a no-op (synth is the only path). When motor_acquire
+         * lands, swap here. */
+        (void)p->source;
+
+        /* Commit to the active-config record AFTER successful apply, so any
+         * future diff is against what we actually programmed.                */
+        s_active_config = *p;
+        if (p->block_period_us == 0u) {
+            /* "leave alone" sentinel -- don't lie in s_active_config */
+            s_active_config.block_period_us = 0u;  /* keep sentinel for next diff */
+        }
+
+        s_last_applied_seq  = ch->cmd_seq;
+        s_have_last_applied = 1;
+        s_latched_ack_flags = MOTOR_FLAG_ACK_OK;
+        s_config_applied_latch = 1;     /* one-shot bit in NEXT outbound frame */
+        g_cmd_ok++;
+        return;
+    }
+
+    default:
+        s_latched_ack_flags = MOTOR_FLAG_ACK_NACK | MOTOR_FLAG_NACK_CMD;
+        g_cmd_nack++;
+        return;
+    }
+}
+
+/* ---- the producer hook --------------------------------------------------- */
 void motor_on_block_ready(const uint16_t *samples, uint16_t n_rows)
 {
     g_obr++;
-    int inflight = s_tx_idx;                 /* 0, 1, or -1 (idle) */
-    int build    = (inflight == 0) ? 1 : 0;  /* build into the buffer not in flight */
+    int inflight = s_tx_idx;
+    int build    = (inflight == 0) ? 1 : 0;
+
+    /* Assemble + arm the CURRENT block first, using the CURRENT config.
+     * Then process any pending command, so a SET_CONFIG only takes effect
+     * for the next block. This keeps the in-flight DMA and the frame
+     * header consistent.                                                  */
     assemble_frame(s_frame[build], samples, n_rows);
 
     if (inflight < 0) {
@@ -191,25 +358,36 @@ void motor_on_block_ready(const uint16_t *samples, uint16_t n_rows)
         if (s_pending) s_skipped++;
         s_pending = 1;
     }
+
+    if (s_cmd_pending) process_pending_cmd();
 }
 
+/* ---- SPI ISR callbacks --------------------------------------------------- */
 void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *h)
 {
     if (h->Instance != SPI2) return;
 
-    HAL_GPIO_WritePin(DR_PORT, DR_PIN, GPIO_PIN_RESET);  /* frame consumed */
+    HAL_GPIO_WritePin(DR_PORT, DR_PIN, GPIO_PIN_RESET);
     s_sent++;
     g_sent++;
 
-    int just = s_tx_idx;                 /* buffer just clocked out */
+    /* Sniff the rx for a command frame. Cheap: just compare 4 bytes. The
+     * full validation (CRC, ranges) happens at the next block boundary in
+     * process_pending_cmd. */
+    uint32_t mag;
+    memcpy(&mag, s_rx_dummy, sizeof mag);
+    if (mag == MOTOR_CMD_MAGIC && !s_cmd_pending) {
+        memcpy(s_pending_cmd, s_rx_dummy, MOTOR_CMD_FRAME_BYTES);
+        s_cmd_pending = 1;
+        g_cmd_seen++;
+    }
 
-    /* Force SPI+DMA fully idle so the NEXT frame starts shifting at byte 0.
-     * Keeps the slave locked to the master's chip-select framing. */
+    int just = s_tx_idx;
     HAL_SPI_DMAStop(&s_hspi2);
 
     if (s_pending) {
         s_pending = 0;
-        arm_tx((just == 0) ? 1 : 0);     /* send the freshly-built other buffer */
+        arm_tx((just == 0) ? 1 : 0);
     } else {
         s_tx_idx = -1;
     }
@@ -220,12 +398,12 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *h)
     if (h->Instance != SPI2) return;
     g_spi_err++;
 
-    HAL_GPIO_WritePin(DR_PORT, DR_PIN, GPIO_PIN_RESET);  /* don't invite a read */
-    HAL_SPI_Abort(&s_hspi2);                             /* clear error, reset   */
+    HAL_GPIO_WritePin(DR_PORT, DR_PIN, GPIO_PIN_RESET);
+    HAL_SPI_Abort(&s_hspi2);
 
-    int idx = (s_tx_idx >= 0) ? s_tx_idx : 0;            /* reuse last frame     */
+    int idx = (s_tx_idx >= 0) ? s_tx_idx : 0;
     s_pending = 0;
-    arm_tx(idx);                                         /* re-arm, re-aligned   */
+    arm_tx(idx);
 }
 
 /* ---- init ---------------------------------------------------------------- */
@@ -271,7 +449,9 @@ static void dma_init(void)
     s_hdma_rx.Init.Channel             = DMA_CHANNEL_0;
     s_hdma_rx.Init.Direction           = DMA_PERIPH_TO_MEMORY;
     s_hdma_rx.Init.PeriphInc           = DMA_PINC_DISABLE;
-    s_hdma_rx.Init.MemInc              = DMA_MINC_DISABLE;
+    /* Was DMA_MINC_DISABLE -- but we now want to CAPTURE the Pi's tx into
+     * s_rx_dummy so we can sniff command frames. Enable memory increment. */
+    s_hdma_rx.Init.MemInc              = DMA_MINC_ENABLE;
     s_hdma_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
     s_hdma_rx.Init.MemDataAlignment    = DMA_MDATAALIGN_BYTE;
     s_hdma_rx.Init.Mode                = DMA_NORMAL;
@@ -312,10 +492,29 @@ void motor_send_init(uint16_t block_rows)
     s_frame_len  = (uint16_t)(sizeof(frame_header_t)
                  + (size_t)block_rows * sizeof(motor_row_t) + sizeof(frame_crc_t));
 
+    /* Seed s_active_config with what motor_synth_init / motor_send_init will
+     * actually have programmed. Must match the synth-side defaults in
+     * motor_synth.c (SYNTH_DEFAULT_PERIOD_US, SYNTH_DEFAULT_CYCLES) so an
+     * incoming SET_CONFIG with the same values is correctly recognised as a
+     * no-op.                                                                 */
+    s_active_config.block_rows      = block_rows;
+    s_active_config.synth_cycles    = 4u;        /* SYNTH_DEFAULT_CYCLES      */
+    s_active_config.source          = MOTOR_SOURCE_SYNTH;
+    s_active_config.run_state       = MOTOR_RUN_RUN;
+    s_active_config.block_period_us = 10000u;    /* SYNTH_DEFAULT_PERIOD_US   */
+
     crc32_init();
     gpio_init();
     dma_init();
     spi_init();
+}
+
+void motor_send_set_block_rows(uint16_t block_rows)
+{
+    if (block_rows == 0 || block_rows > MOTOR_MAX_ROWS_PER_BLOCK) return;
+    s_block_rows = block_rows;
+    s_frame_len  = (uint16_t)(sizeof(frame_header_t)
+                 + (size_t)block_rows * sizeof(motor_row_t) + sizeof(frame_crc_t));
 }
 
 void motor_send_get_stats(uint32_t *frames_sent, uint32_t *frames_skipped)

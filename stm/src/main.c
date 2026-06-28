@@ -21,6 +21,11 @@
  *
  * Flash this, watch the LED, report the number. Revert to the plain main() once
  * we know the stage.
+ *
+ * Main loop also calls motor_synth_service() to run any deferred apply work
+ * (pattern rebuild on synth_cycles change, TIM2 reprogram on period change)
+ * outside the TIM2 ISR -- keeps the ISR cheap so reconfigs don't stall the
+ * SPI pipeline at slow clocks.
  * ----------------------------------------------------------------------------
  */
 #include "stm32f4xx_hal.h"
@@ -54,9 +59,18 @@ static void led_init(void)
     led_off();
 }
 
+/* Blink-group helper that ALSO services deferred apply work between LED edges,
+ * so a slow rebuild (~500 us) doesn't have to wait for a whole blink cycle.
+ * motor_synth_service() is cheap when there's nothing to do.                 */
 static void blink_group(int n)
 {
-    for (int i = 0; i < n; ++i) { led_on(); HAL_Delay(150); led_off(); HAL_Delay(250); }
+    for (int i = 0; i < n; ++i) {
+        motor_synth_service();
+        led_on();  HAL_Delay(150);
+        motor_synth_service();
+        led_off(); HAL_Delay(250);
+    }
+    motor_synth_service();
     HAL_Delay(1500);
 }
 
@@ -73,6 +87,8 @@ int main(void)
     motor_synth_start();
 
     for (;;) {
+        motor_synth_service();          /* drain any pending reconfig work  */
+
         int stage = 1;
         if (g_synth_cb)   stage = 2;
         if (g_obr)        stage = 3;

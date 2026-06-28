@@ -19,6 +19,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
+#include <pthread.h>
 #include "rpi_spi.h"
 
 #define SPI_DEVICE_FILENAME_FORMAT "/dev/io-spi/spi%d/dev%d"
@@ -36,7 +37,7 @@ static int spi_device_fd[MAX_SPI_BUSES][MAX_SPI_BUS_DEVICES] = {
     {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1}};
 
 // Mutex protecting the SPI device file descriptors
-static pthread_mutex_t spi_fd_mutex;
+static pthread_mutex_t spi_fd_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* Open the SPI device */
 static int
@@ -54,6 +55,7 @@ open_spi_device_fd(unsigned bus_number, unsigned device_number)
         if (spi_device_fd[bus_number][device_number] < 0)
         {
             perror("open");
+            pthread_mutex_unlock(&spi_fd_mutex);
             return SPI_ERROR_NOT_CONNECTED;
         }
     }
@@ -75,6 +77,7 @@ close_spi_device_fd(unsigned bus_number, unsigned device_number)
         if (err != EOK)
         {
             perror("close");
+            pthread_mutex_unlock(&spi_fd_mutex);
             return SPI_ERROR_NOT_CONNECTED;
         }
         spi_device_fd[bus_number][device_number] = -1;
@@ -202,7 +205,7 @@ int rpi_spi_write_read_data(unsigned bus_number, unsigned device_number,
 
     // Add the data to write
     spi_xchng_msg->nbytes = data_size;
-    for (int i = 0; i < data_size; i++)
+    for (uint32_t i = 0; i < data_size; i++)
     {
         spi_xchng_msg->data[i] = write_data_buffer[i];
     }
@@ -220,7 +223,7 @@ int rpi_spi_write_read_data(unsigned bus_number, unsigned device_number,
     // Copy the read data (if a buffer is provided)
     if (read_data_buffer != NULL)
     {
-        for (int i = 0; i < data_size; i++)
+        for (uint32_t i = 0; i < data_size; i++)
         {
             read_data_buffer[i] = spi_xchng_msg->data[i];
         }

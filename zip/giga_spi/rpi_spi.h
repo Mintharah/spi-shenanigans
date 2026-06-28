@@ -25,7 +25,7 @@
 #define SPI0_CE1 7
 #define SPI0_MOSI 10
 #define SPI0_MISO 9
-#define SPI0_SCLK 7
+#define SPI0_SCLK 11
 #define SPI1_CE0 18
 #define SPI1_CE1 17
 #define SPI1_CE2 16
