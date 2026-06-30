@@ -306,10 +306,7 @@ static void process_pending_cmd(void)
             any_change = 1;
         }
         if (p->run_state != s_active_config.run_state) {
-            if (p->run_state == MOTOR_RUN_STOP)
-                motor_synth_stop();
-            else
-                motor_synth_start();
+            motor_synth_set_run_state((uint8_t)p->run_state);
             any_change = 1;
         }
         /* source: still a no-op (synth is the only path). When motor_acquire

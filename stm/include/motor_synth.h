@@ -33,9 +33,13 @@ void motor_synth_service(void);
 
 /* Runtime reconfig. set_block_rows is now cheap (variable update only); the
  * pattern table is pre-built for MAX rows at init. set_synth_cycles flags a
- * deferred rebuild that motor_synth_service() picks up from main().         */
+ * deferred rebuild that motor_synth_service() picks up from main(). The
+ * period and run_state setters are also deferred for the same reason --
+ * touching TIM2 from inside its own ISR is what was stalling the apply path.
+ * run_state: 0 = stop, 1 = run.                                              */
 void motor_synth_set_block_rows(uint16_t block_rows);
 void motor_synth_set_synth_cycles(uint16_t synth_cycles);
 void motor_synth_set_period_us(uint32_t period_us);
+void motor_synth_set_run_state(uint8_t run_state);
 
 #endif /* MOTOR_SYNTH_H */

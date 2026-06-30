@@ -5,7 +5,7 @@ qcc -Vgcc_ntoaarch64le -std=gnu11 -O2   -I/home/yasmine/hardware-component-sampl
 
 scp motor_controller qnxuser@192.168.1.62:/data/home/qnxuser/
 
-    ifconfig cgem0 192.168.1.62 netmask 255.255.255.0 up
+        ifconfig cgem0 192.168.1.62 netmask 255.255.255.0 up
 
 /system/etc/spi.conf → dev0 at clock_rate=4000000, cpha= (whatever your working grep cpha showed), cpol=0, word_width=8, idle_insert=0, then restart spi-dwc.
 The wiring (CE0→PB12, SCLK→PB13, MISO→PB14, MOSI→PB15, GPIO17→PB0, common GND) and the 1 kΩ pull-down on GPIO17.
@@ -25,7 +25,7 @@ bit_order=msb
 word_width=8
 idle_insert=0
 
-sed -i 's/clock_rate=4000000/clock_rate=4000000/; s/cpha=1/cpha=0/; s/word_width=32/word_width=8/; s/idle_insert=1/idle_insert=0/' /system/etc/spi.conf   
+sed -i 's/clock_rate=4000000/clock_rate=16000000/; s/cpha=0/cpha=1/; s/word_width=8/word_width=32/; s/idle_insert=1/idle_insert=0/' /system/etc/spi.conf   
 slay spi-dwc
 spi-dwc -c /system/etc/spi.conf &
 grep -E 'clock_rate|cpha|word_width' /system/etc/spi.conf

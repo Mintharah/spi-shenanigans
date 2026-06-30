@@ -374,6 +374,14 @@ int main(int argc, char **argv)
     shm_region_t *region = shm_setup();
     if (!region) { perror("shm_setup"); return 1; }
 
+    /* Make spi-dwc reflect cfg.pi.spi_* before we open its device. On QNX/Pi5
+     * this is the only way these wire parameters actually change -- the
+     * runtime DCMD_SPI_SET_CONFIG devctl ignores them. */
+    if (spi_apply_conf(&cfg.pi) != 0) {
+        fprintf(stderr, "[ctrl] WARNING: could not apply SPI config; wire will "
+                "run at whatever spi.conf currently says\n");
+    }
+
     if (rpi_spi_configure_device(cfg.pi.spi_bus, cfg.pi.spi_dev, cfg.pi.spi_mode,
                                  cfg.pi.spi_clock_hz) != SPI_SUCCESS) {
         fprintf(stderr, "rpi_spi_configure_device failed\n");

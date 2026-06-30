@@ -24,12 +24,21 @@
 
 /* ---- Pi-only tier --------------------------------------------------------
  * Mirrors the existing controller_config_t in motor_controller.c, plus the
- * downstream scaling constants that motor_wire.h promises live on the Pi.    */
+ * downstream scaling constants that motor_wire.h promises live on the Pi.
+ *
+ * NOTE on the SPI fields (clock_hz, cpha, word_width, idle_insert): QNX's
+ * spi-dwc only honors these from its config file (/system/etc/spi.conf),
+ * not the runtime DCMD_SPI_SET_CONFIG devctl. To keep the JSON authoritative,
+ * the controller edits spi.conf to match on startup and bounces spi-dwc to
+ * make the changes stick. See spi_apply_conf() below.                        */
 typedef struct {
     int      spi_bus;
     int      spi_dev;
     int      spi_mode;
     uint32_t spi_clock_hz;
+    int      spi_cpha;         /* 0 or 1; STM expects 0 (mode 0)              */
+    int      spi_word_width;   /* 8, 16, or 32; STM expects 8                 */
+    int      spi_idle_insert;  /* 0 or 1                                       */
     int      rt_priority;
     int      dataready_pin;
 
@@ -72,5 +81,14 @@ int  config_load_file(const char *path, full_config_t *out);
 bool config_stm_differs(const config_payload_t *a, const config_payload_t *b);
 void config_install_sighup(void);
 bool config_reload_requested(void);
+
+/* spi_apply_conf: bring /system/etc/spi.conf into agreement with the SPI
+ * fields in `pi` (clock_rate, cpha, word_width, idle_insert) and bounce
+ * spi-dwc if anything actually changed. Idempotent: a no-op if the file
+ * already matches. Returns 0 on success, -1 on any error.
+ *
+ * The caller MUST close any open SPI file descriptors before calling this,
+ * and reopen them after, because the spi-dwc restart invalidates them.     */
+int  spi_apply_conf(const pi_config_t *pi);
 
 #endif /* CONFIG_H */

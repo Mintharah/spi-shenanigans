@@ -139,9 +139,11 @@ void motor_synth_stop(void)
 
 /* Deferred work flags set by the apply path (which runs inside the TIM2 ISR)
  * and serviced by motor_synth_service() from the main loop. volatile because
- * they cross ISR <-> main-loop. s_pending_period_us == 0 means "no change". */
+ * they cross ISR <-> main-loop. s_pending_period_us == 0 means "no change".
+ * s_pending_run_state == 0xFF means "no change", 0 = stop, 1 = run.         */
 static volatile uint8_t  s_rebuild_pending   = 0;
 static volatile uint32_t s_pending_period_us = 0;
+static volatile uint8_t  s_pending_run_state = 0xFFu;
 
 void motor_synth_set_block_rows(uint16_t block_rows)
 {
@@ -173,6 +175,18 @@ void motor_synth_set_period_us(uint32_t period_us)
     s_pending_period_us = period_us;
 }
 
+void motor_synth_set_run_state(uint8_t run_state)
+{
+    if (run_state > 1) return;
+    /* Defer to service() so the ACK frame goes out FIRST: the apply path
+     * latches ACK_OK in process_pending_cmd, but the ACK rides the NEXT
+     * outbound frame. If we stopped the timer right here, no next frame
+     * ever leaves and the Pi never sees the ACK. By the time service()
+     * runs (a few ms later from the main loop), the ACK frame has already
+     * been assembled and shipped by TIM2.                                  */
+    s_pending_run_state = run_state;
+}
+
 void motor_synth_service(void)
 {
     uint32_t p = s_pending_period_us;
@@ -183,6 +197,12 @@ void motor_synth_service(void)
     if (s_rebuild_pending) {
         s_rebuild_pending = 0;
         build_pattern(MOTOR_MAX_ROWS_PER_BLOCK, s_synth_cycles);
+    }
+    uint8_t r = s_pending_run_state;
+    if (r != 0xFFu) {
+        s_pending_run_state = 0xFFu;
+        if (r == 0) motor_synth_stop();
+        else        motor_synth_start();
     }
 }
 
