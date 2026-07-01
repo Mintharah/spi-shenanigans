@@ -426,6 +426,12 @@ int main(int argc, char **argv)
     uint16_t last_n_rows = 0;
     uint16_t last_h_flags = 0;       /* diagnostic: last received header  */
     uint16_t last_h_reserved = 0;
+    /* diagnostic tap for sensor values -- helps eyeball whether real data is
+     * flowing without having to attach a debugger or open shm from another
+     * process. Updated on every published frame; printed in the status log. */
+    int16_t  last_vib_x = 0, last_vib_y = 0, last_vib_z = 0;
+    uint16_t last_cur0 = 0, last_cur1 = 0, last_cur2 = 0;
+    uint16_t last_rpm = 0;
     struct timespec t_log;
     clock_gettime(CLOCK_MONOTONIC, &t_log);
 
@@ -440,12 +446,15 @@ int main(int argc, char **argv)
                 " magic=%" PRIu64 " ver=%" PRIu64 " size=%" PRIu64
                 " dup=%" PRIu64 " rst=%" PRIu64 " to=%" PRIu64
                 " spi=%" PRIu64 " cfg(rld=%" PRIu64 " ack=%" PRIu64 " nack=%" PRIu64 ")"
-                " last(flags=0x%04x rsv=%u)\n",
+                " last(flags=0x%04x rsv=%u)"
+                " sens(cur=%u/%u/%u vib=%d/%d/%d rpm=%u)\n",
                 st.frames_ok, st.seq_drops, st.crc_err, st.magic_err,
                 st.version_err, st.size_err, st.duplicates, st.resets,
                 st.timeouts, st.spi_err,
                 st.cfg_reloads, st.cfg_acks_ok, st.cfg_nacks,
-                last_h_flags, last_h_reserved);
+                last_h_flags, last_h_reserved,
+                last_cur0, last_cur1, last_cur2,
+                last_vib_x, last_vib_y, last_vib_z, last_rpm);
         }
 
         /* ---- SIGHUP: reload, diff, queue ---- */
@@ -540,7 +549,17 @@ int main(int argc, char **argv)
         /* ---- publish ---- */
         if (publish) {
             const motor_row_t *rows = (const motor_row_t *)(rx + sizeof(frame_header_t));
-            motor_snapshot_publish(&region->snapshot, &rows[h->n_rows - 1],
+            const motor_row_t *last = &rows[h->n_rows - 1];
+            /* Snapshot the last row's sensor values for the diagnostic log. */
+            last_cur0  = last->current[0];
+            last_cur1  = last->current[1];
+            last_cur2  = last->current[2];
+            last_vib_x = last->vib_x;
+            last_vib_y = last->vib_y;
+            last_vib_z = last->vib_z;
+            last_rpm   = last->rpm;
+
+            motor_snapshot_publish(&region->snapshot, last,
                                    h->seq, h->timestamp, h->flags);
             motor_ring_publish(&region->ring, h, rows);
             st.frames_ok++;

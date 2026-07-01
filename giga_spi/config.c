@@ -46,10 +46,11 @@ const full_config_t CONFIG_DEFAULTS = {
     },
     .stm = {
         .block_rows      = 200,
-        .synth_cycles    = 4,
-        .source          = MOTOR_SOURCE_SYNTH,
+        ._reserved0      = 0,
+        .source          = MOTOR_SOURCE_ADC,
         .run_state       = MOTOR_RUN_RUN,
-        .block_period_us = 10000u,  /* 100 Hz */
+        .sample_rate_hz  = 20000u,  /* 20 kHz ADC scan of 3 currents */
+        .imu_rate_hz     = 1000u,   /* 1 kHz MPU6050 poll (native max) */
         .reserved        = {0},
     },
 };
@@ -154,14 +155,25 @@ static int j_source(const cJSON *root, uint16_t *dst)
     const cJSON *n = cJSON_GetObjectItemCaseSensitive(root, "source");
     if (!n) return 0;  /* keep default */
     if (cJSON_IsString(n)) {
-        if      (strcmp(n->valuestring, "synth") == 0) *dst = MOTOR_SOURCE_SYNTH;
-        else if (strcmp(n->valuestring, "adc")   == 0) *dst = MOTOR_SOURCE_ADC;
-        else { fprintf(stderr, "config: source must be \"synth\" or \"adc\"\n"); return -1; }
-        return 0;
+        if (strcmp(n->valuestring, "adc") == 0) {
+            *dst = MOTOR_SOURCE_ADC;
+            return 0;
+        }
+        if (strcmp(n->valuestring, "synth") == 0) {
+            fprintf(stderr, "config: 'source: synth' is no longer supported "
+                    "(removed in schema v2)\n");
+            return -1;
+        }
+        fprintf(stderr, "config: source must be \"adc\"\n");
+        return -1;
     }
     if (cJSON_IsNumber(n)) {
         int v = (int)n->valuedouble;
-        if (v != 0 && v != 1) { fprintf(stderr, "config: source int must be 0 or 1\n"); return -1; }
+        if (v != MOTOR_SOURCE_ADC) {
+            fprintf(stderr, "config: source int must be %u (adc)\n",
+                    (unsigned)MOTOR_SOURCE_ADC);
+            return -1;
+        }
         *dst = (uint16_t)v;
         return 0;
     }
@@ -267,22 +279,26 @@ int config_load_file(const char *path, full_config_t *out)
         if (j_uint(stm, "block_rows",      &br, 1u, MOTOR_MAX_ROWS_PER_BLOCK, false) < 0) goto bad;
         cfg.stm.block_rows = (uint16_t)br;
 
-        uint32_t sc = cfg.stm.synth_cycles;
-        if (j_uint(stm, "synth_cycles",    &sc, 1u, 64u, false) < 0) goto bad;
-        cfg.stm.synth_cycles = (uint16_t)sc;
-
         if (j_source(stm,    &cfg.stm.source)    < 0) goto bad;
         if (j_run_state(stm, &cfg.stm.run_state) < 0) goto bad;
 
-        /* block_period_us: 0 means "leave alone" on the STM side. Allow 0
-         * here too; otherwise clamp to a sane band. */
-        const cJSON *bp = cJSON_GetObjectItemCaseSensitive(stm, "block_period_us");
-        if (bp && cJSON_IsNumber(bp)) {
-            double d = bp->valuedouble;
-            if (d < 0.0 || d > 1000000.0) {
-                fprintf(stderr, "config: block_period_us out of range\n"); goto bad;
-            }
-            cfg.stm.block_period_us = (uint32_t)d;
+        /* sample_rate_hz: 0 means "leave alone" on the STM side. Range
+         * 100 Hz .. 100 kHz keeps us inside ADC + DMA capability and out
+         * of pathological territory.                                       */
+        if (j_uint(stm, "sample_rate_hz", &cfg.stm.sample_rate_hz,
+                   0u, 100000u, false) < 0) goto bad;
+        if (cfg.stm.sample_rate_hz != 0u && cfg.stm.sample_rate_hz < 100u) {
+            fprintf(stderr, "config: sample_rate_hz too low (min 100 Hz)\n");
+            goto bad;
+        }
+
+        /* imu_rate_hz: 0 = leave alone. Range 10..1000 Hz (MPU6050 accel
+         * native output is 1 kHz -> upper bound). Below 10 Hz is silly.    */
+        if (j_uint(stm, "imu_rate_hz", &cfg.stm.imu_rate_hz,
+                   0u, 1000u, false) < 0) goto bad;
+        if (cfg.stm.imu_rate_hz != 0u && cfg.stm.imu_rate_hz < 10u) {
+            fprintf(stderr, "config: imu_rate_hz too low (min 10 Hz)\n");
+            goto bad;
         }
     }
 

@@ -20,9 +20,9 @@
   },
   "stm": {
     "block_rows": 200,
-    "synth_cycles": 4,
-    "source": "synth",
+    "source": "adc",
     "run_state": "run",
-    "block_period_us": 10000
+    "sample_rate_hz": 20000,
+    "imu_rate_hz": 1000
   }
 }

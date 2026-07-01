@@ -25,33 +25,37 @@
 /* Bump whenever ANY wire/shm struct layout changes (esp. motor_row_t). Stamped
  * into every frame header and into the shm region; the producer and every
  * consumer compare it and refuse to run on a mismatch.                         */
-#define MOTOR_CONTRACT_VERSION   2u   /* v2: row trimmed to current/vib/rpm (temp+voltage removed) */
+#define MOTOR_CONTRACT_VERSION   3u   /* v3: row grew to 3 currents (3-phase); MAX_ROWS reduced */
 
 /* ============================ wire framing ================================ */
 #define MOTOR_FRAME_MAGIC        0x4D4F5452u  /* "MOTR" little-endian resync marker */
 
 /* Generous compile-time maximum -- FIXED. The runtime block size is a config
  * parameter and MUST be <= MOTOR_MAX_ROWS_PER_BLOCK. Buffers are sized to the
- * max so a config change never requires recompilation.                        */
-#define MOTOR_MAX_ROWS_PER_BLOCK 512u   /* default runtime block = 200 rows -> ~100 Hz @ 20 kHz */
+ * max so a config change never requires recompilation.
+ *
+ * Reduced from 512 (v2) to 300 when the row grew to 3 currents. Worst-case
+ * frame at MAX rows: 24 + 300*14 + 4 = 4228 bytes = 8.5 ms transfer @ 4 MHz
+ * SPI, comfortably under a 10 ms (100 Hz) block period.                     */
+#define MOTOR_MAX_ROWS_PER_BLOCK 300u
 
 /* ---- the per-timestep "wide row" -----------------------------------------
- *  FINAL sensor set: current, vibration (3 axes), speed. Raw counts on the wire;
- *  scaling to engineering units is applied downstream from the config constants.
- *  If the sensor set ever changes, edit these fields, update the static_assert,
- *  and bump MOTOR_CONTRACT_VERSION.
+ *  FINAL sensor set: 3 currents (three-phase), vibration (3 axes), speed.
+ *  Raw counts on the wire; scaling to engineering units is applied downstream
+ *  from the config constants. If the sensor set ever changes, edit these
+ *  fields, update the static_assert, and bump MOTOR_CONTRACT_VERSION.
  */
 #pragma pack(push, 1)
 typedef struct {
-    uint16_t current;   /* analog / ADC, truly sampled per row @ 20 kHz            */
-    int16_t  vib_x;     /* MPU6050 over I2C, zero-order-held (~1 kHz native)        */
+    uint16_t current[3]; /* three ADC1 channels (PA0 IN0, PA1 IN1, PA2 IN2)      */
+    int16_t  vib_x;      /* MPU6050 over I2C, ZOH-held at imu_rate_hz            */
     int16_t  vib_y;
     int16_t  vib_z;
-    uint16_t rpm;       /* speed, from timer input-capture (tach pulses)           */
+    uint16_t rpm;        /* speed, from timer input-capture (tach pulses)        */
 } motor_row_t;
 #pragma pack(pop)
 
-_Static_assert(sizeof(motor_row_t) == 10,
+_Static_assert(sizeof(motor_row_t) == 14,
                "motor_row_t layout changed: update this size and bump MOTOR_CONTRACT_VERSION");
 
 /* ---- frame header (prepended to every block on the wire) ------------------
@@ -125,11 +129,11 @@ typedef uint32_t frame_crc_t;
 #define MOTOR_CMD_SET_CONFIG         1u
 #define MOTOR_CMD_PING               2u
 
-#define MOTOR_CONFIG_SCHEMA_VERSION  1u  /* bump on config_payload_t change     */
+#define MOTOR_CONFIG_SCHEMA_VERSION  2u  /* bump on config_payload_t change     */
 
 /* config_payload_t.source */
-#define MOTOR_SOURCE_SYNTH           0u
-#define MOTOR_SOURCE_ADC             1u  /* future: motor_acquire path          */
+#define MOTOR_SOURCE_SYNTH           0u  /* deprecated; firmware no longer builds it */
+#define MOTOR_SOURCE_ADC             1u
 
 /* config_payload_t.run_state */
 #define MOTOR_RUN_STOP               0u
@@ -146,13 +150,14 @@ typedef struct {
 
 typedef struct {
     uint16_t block_rows;     /* 1..MOTOR_MAX_ROWS_PER_BLOCK                       */
-    uint16_t synth_cycles;   /* 1..64 (sine cycles per pattern when in synth)    */
-    uint16_t source;         /* MOTOR_SOURCE_*                                    */
+    uint16_t _reserved0;     /* was 'synth_cycles' in v1; ignored in v2          */
+    uint16_t source;         /* MOTOR_SOURCE_* (only ADC valid in v2)            */
     uint16_t run_state;      /* MOTOR_RUN_*                                       */
-    uint32_t block_period_us;/* TIM2 block cadence in microseconds; 0 = leave    */
-                             /* alone (default 10000 = 100 Hz)                   */
-    uint8_t  reserved[16];   /* MUST be zeroed by the sender; keeps payload      */
-                             /* stable so older fw can refuse a newer schema     */
+    uint32_t sample_rate_hz; /* ADC current sample rate; 100..100000 Hz          */
+                             /* (block cadence = sample_rate_hz / block_rows)    */
+    uint32_t imu_rate_hz;    /* MPU6050 poll rate; 10..1000 Hz                   */
+                             /* (1000 = max useful for MPU6050 accel)            */
+    uint8_t  reserved[12];   /* MUST be zeroed by the sender                     */
 } config_payload_t;
 #pragma pack(pop)
 
