@@ -24,6 +24,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <signal.h>
+#include <time.h>        /* nanosleep() in bounce_spi_dwc()               */
 #include <sys/stat.h>
 
 #include "cJSON.h"
@@ -78,6 +79,28 @@ bool config_reload_requested(void)
 bool config_stm_differs(const config_payload_t *a, const config_payload_t *b)
 {
     return memcmp(a, b, sizeof *a) != 0;
+}
+
+/* True if any Pi field that requires reinitialising the SPI bus or the
+ * data-ready GPIO subscription changed. rt_priority and the scaling constants
+ * are excluded on purpose -- those are applied live by pi_apply_live() and do
+ * not need a bus bounce. Keep this in sync with pi_apply_live(): every pi field
+ * is handled either here (needs reinit) or there (applies live). */
+bool config_spi_wire_differs(const pi_config_t *a, const pi_config_t *b)
+{
+    return a->spi_bus         != b->spi_bus
+        || a->spi_dev         != b->spi_dev
+        || a->spi_mode        != b->spi_mode
+        || a->spi_clock_hz    != b->spi_clock_hz
+        || a->spi_cpha        != b->spi_cpha
+        || a->spi_word_width  != b->spi_word_width
+        || a->spi_idle_insert != b->spi_idle_insert;
+}
+
+bool config_pi_hw_differs(const pi_config_t *a, const pi_config_t *b)
+{
+    return config_spi_wire_differs(a, b)
+        || a->dataready_pin   != b->dataready_pin;
 }
 
 /* ============================ JSON helpers ================================

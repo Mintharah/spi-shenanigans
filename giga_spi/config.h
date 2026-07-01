@@ -70,6 +70,22 @@ extern const full_config_t CONFIG_DEFAULTS;
  *                     Used to decide whether a SIGHUP reload needs to push
  *                     a new SET_CONFIG (vs. only Pi-local changes).
  *
+ * config_spi_wire_differs: true if any SPI-side field that requires reopening
+ *                     the bus differs -- spi_bus/dev/mode/clock_hz/cpha/
+ *                     word_width/idle_insert. Excludes dataready_pin: the GPIO
+ *                     edge subscription lives on a *separate* resource manager
+ *                     (rpi_gpio) and is not disturbed by bouncing spi-dwc, so a
+ *                     wire-only change must NOT tear down GPIO. Used to gate the
+ *                     close_spi -> spi_apply_conf -> open_spi path.
+ *
+ * config_pi_hw_differs: true if any Pi field that requires re-initialising the
+ *                     SPI bus OR moving the data-ready GPIO subscription differs
+ *                     -- i.e. config_spi_wire_differs() OR dataready_pin.
+ *                     rt_priority and the scaling constants are deliberately
+ *                     excluded: those apply live (see pi_apply_live) without
+ *                     bouncing anything. Convenience gate for "does this reload
+ *                     need any hardware reinit at all".
+ *
  * config_install_sighup: install the SIGHUP handler that sets the global
  *                     reload flag. Call once from main.
  *
@@ -79,6 +95,8 @@ extern const full_config_t CONFIG_DEFAULTS;
  */
 int  config_load_file(const char *path, full_config_t *out);
 bool config_stm_differs(const config_payload_t *a, const config_payload_t *b);
+bool config_spi_wire_differs(const pi_config_t *a, const pi_config_t *b);
+bool config_pi_hw_differs(const pi_config_t *a, const pi_config_t *b);
 void config_install_sighup(void);
 bool config_reload_requested(void);
 
