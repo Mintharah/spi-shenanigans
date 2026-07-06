@@ -1,25 +1,27 @@
 /*
  * motor_source.h
  * ----------------------------------------------------------------------------
- * The contract between a data SOURCE and its CONSUMER on the STM32.
+ * Producer -> consumer contract. motor_acquire (or formerly motor_synth)
+ * implements the producer; motor_send.c implements motor_on_block_ready as
+ * the consumer.
  *
- *   A source -- motor_acquire (real ADC) or motor_synth (dummy data) -- produces
- *   one block of current samples at a time and calls motor_on_block_ready().
- *   The consumer (the frame-assembly / send side) implements that function: it
- *   wraps the block into a wire frame and pushes it out over SPI.
+ * SIGNATURE CHANGE in schema v2: motor_on_block_ready now takes a const
+ * motor_row_t * (fully composed rows, including IMU + RPM) instead of a
+ * raw uint16_t * of current samples. The producer is responsible for row
+ * composition because only it knows the live sensor cache; motor_send no
+ * longer fabricates anything.
  *
- * Keeping the hook here makes the two sources independent of each other --
- * synth does not depend on acquire, and vice versa.
+ * The pointer is valid for the duration of the call only. motor_send must
+ * memcpy out of `rows` before returning, because the producer will reuse
+ * its row buffer on the next block.
  * ----------------------------------------------------------------------------
  */
 #ifndef MOTOR_SOURCE_H
 #define MOTOR_SOURCE_H
 
 #include <stdint.h>
+#include "motor_wire.h"   /* motor_row_t */
 
-/* Called from DMA-ISR context whenever one block of `n_rows` contiguous uint16
- * current samples is full and stable. Implemented by the send side.
- * KEEP IT SHORT -- it runs in interrupt context. */
-void motor_on_block_ready(const uint16_t *samples, uint16_t n_rows);
+void motor_on_block_ready(const motor_row_t *rows, uint16_t n_rows);
 
 #endif /* MOTOR_SOURCE_H */

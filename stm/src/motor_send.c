@@ -34,9 +34,9 @@
 #include "stm32f4xx_hal.h"
 #include <string.h>
 #include "motor_wire.h"
-#include "motor_source.h"   /* motor_on_block_ready() -- we implement it */
+#include "motor_source.h"     /* motor_on_block_ready() -- we implement it */
 #include "motor_send.h"
-#include "motor_synth.h"    /* runtime reconfig of the synth source     */
+#include "motor_acquire.h"    /* runtime reconfig of the real-sensor source */
 
 extern void Error_Handler(void);
 
@@ -123,7 +123,7 @@ static uint32_t crc32_mpeg2(const uint8_t *d, size_t n)
 }
 
 /* ---- frame assembly ------------------------------------------------------ */
-static void assemble_frame(uint8_t *buf, const uint16_t *samples, uint16_t n_rows)
+static void assemble_frame(uint8_t *buf, const motor_row_t *rows_in, uint16_t n_rows)
 {
     uint32_t seq = s_seq++;
 
@@ -143,19 +143,10 @@ static void assemble_frame(uint8_t *buf, const uint16_t *samples, uint16_t n_row
     h->flags     = f;
     h->_reserved = s_latched_cmd_seq;
 
-    int16_t  vx  = (int16_t)(180 + (int)(seq % 40));
-    int16_t  vy  = (int16_t)(-150 + (int)(seq % 30));
-    int16_t  vz  = (int16_t)(40 + (int)(seq % 60));
-    uint16_t rpm = (uint16_t)(1500);
-
-    motor_row_t *rows = (motor_row_t *)(buf + sizeof(frame_header_t));
-    for (uint16_t i = 0; i < n_rows; ++i) {
-        rows[i].current = samples[i];
-        rows[i].vib_x   = vx;
-        rows[i].vib_y   = vy;
-        rows[i].vib_z   = vz;
-        rows[i].rpm     = rpm;
-    }
+    /* Rows are already fully composed by the producer (motor_acquire);
+     * just copy them in.                                                    */
+    motor_row_t *dst = (motor_row_t *)(buf + sizeof(frame_header_t));
+    memcpy(dst, rows_in, (size_t)n_rows * sizeof(motor_row_t));
 
     size_t covered = sizeof(frame_header_t) + (size_t)n_rows * sizeof(motor_row_t);
     uint32_t crc = crc32_mpeg2(buf, covered);
@@ -274,12 +265,17 @@ static void process_pending_cmd(void)
             return;
         }
 
-        /* Range check EVERY field before we touch anything. */
+        /* Range check EVERY field before we touch anything.
+         * sample_rate_hz and imu_rate_hz allow 0 as a "leave alone" sentinel;
+         * non-zero values must fall in the valid band.                      */
+        int bad_sample = (p->sample_rate_hz != 0u &&
+                          (p->sample_rate_hz < 100u || p->sample_rate_hz > 100000u));
+        int bad_imu    = (p->imu_rate_hz != 0u &&
+                          (p->imu_rate_hz < 10u || p->imu_rate_hz > 1000u));
         if (p->block_rows == 0u || p->block_rows > MOTOR_MAX_ROWS_PER_BLOCK ||
-            p->synth_cycles == 0u || p->synth_cycles > 64u ||
             p->source > MOTOR_SOURCE_ADC ||
             p->run_state > MOTOR_RUN_RUN ||
-            p->block_period_us > 1000000u) {
+            bad_sample || bad_imu) {
             s_latched_ack_flags = MOTOR_FLAG_ACK_NACK | MOTOR_FLAG_NACK_RANGE;
             g_cmd_nack++;
             return;
@@ -293,32 +289,38 @@ static void process_pending_cmd(void)
 
         if (p->block_rows != s_active_config.block_rows) {
             motor_send_set_block_rows(p->block_rows);
-            motor_synth_set_block_rows(p->block_rows);
+            motor_acquire_set_block_rows(p->block_rows);
             any_change = 1;
         }
-        if (p->synth_cycles != s_active_config.synth_cycles) {
-            motor_synth_set_synth_cycles(p->synth_cycles);
+        /* synth_cycles is _reserved0 in schema v2; ignore whatever the Pi
+         * happened to send.                                                 */
+        if (p->sample_rate_hz != 0u &&
+            p->sample_rate_hz != s_active_config.sample_rate_hz) {
+            motor_acquire_set_sample_rate(p->sample_rate_hz);
             any_change = 1;
         }
-        if (p->block_period_us != 0u &&
-            p->block_period_us != s_active_config.block_period_us) {
-            motor_synth_set_period_us(p->block_period_us);
+        if (p->imu_rate_hz != 0u &&
+            p->imu_rate_hz != s_active_config.imu_rate_hz) {
+            motor_acquire_set_imu_rate(p->imu_rate_hz);
             any_change = 1;
         }
         if (p->run_state != s_active_config.run_state) {
-            motor_synth_set_run_state((uint8_t)p->run_state);
+            motor_acquire_set_run_state((uint8_t)p->run_state);
             any_change = 1;
         }
-        /* source: still a no-op (synth is the only path). When motor_acquire
-         * lands, swap here. */
-        (void)p->source;
+        /* source: only ADC is supported in v2. Refuse anything else.        */
+        if (p->source != MOTOR_SOURCE_ADC) {
+            s_latched_ack_flags = MOTOR_FLAG_ACK_NACK | MOTOR_FLAG_NACK_RANGE;
+            g_cmd_nack++;
+            return;
+        }
 
         /* Commit to the active-config record AFTER successful apply, so any
          * future diff is against what we actually programmed.                */
         s_active_config = *p;
-        if (p->block_period_us == 0u) {
-            /* "leave alone" sentinel -- don't lie in s_active_config */
-            s_active_config.block_period_us = 0u;  /* keep sentinel for next diff */
+        if (p->sample_rate_hz == 0u) {
+            /* "leave alone" sentinel -- preserve for next diff */
+            s_active_config.sample_rate_hz = 0u;
         }
 
         s_last_applied_seq  = ch->cmd_seq;
@@ -326,6 +328,7 @@ static void process_pending_cmd(void)
         s_latched_ack_flags = MOTOR_FLAG_ACK_OK;
         s_config_applied_latch = 1;     /* one-shot bit in NEXT outbound frame */
         g_cmd_ok++;
+        (void)any_change;
         return;
     }
 
@@ -337,7 +340,7 @@ static void process_pending_cmd(void)
 }
 
 /* ---- the producer hook --------------------------------------------------- */
-void motor_on_block_ready(const uint16_t *samples, uint16_t n_rows)
+void motor_on_block_ready(const motor_row_t *rows, uint16_t n_rows)
 {
     g_obr++;
     int inflight = s_tx_idx;
@@ -347,7 +350,7 @@ void motor_on_block_ready(const uint16_t *samples, uint16_t n_rows)
      * Then process any pending command, so a SET_CONFIG only takes effect
      * for the next block. This keeps the in-flight DMA and the frame
      * header consistent.                                                  */
-    assemble_frame(s_frame[build], samples, n_rows);
+    assemble_frame(s_frame[build], rows, n_rows);
 
     if (inflight < 0) {
         arm_tx(build);
@@ -494,11 +497,12 @@ void motor_send_init(uint16_t block_rows)
      * motor_synth.c (SYNTH_DEFAULT_PERIOD_US, SYNTH_DEFAULT_CYCLES) so an
      * incoming SET_CONFIG with the same values is correctly recognised as a
      * no-op.                                                                 */
-    s_active_config.block_rows      = block_rows;
-    s_active_config.synth_cycles    = 4u;        /* SYNTH_DEFAULT_CYCLES      */
-    s_active_config.source          = MOTOR_SOURCE_SYNTH;
-    s_active_config.run_state       = MOTOR_RUN_RUN;
-    s_active_config.block_period_us = 10000u;    /* SYNTH_DEFAULT_PERIOD_US   */
+    s_active_config.block_rows     = block_rows;
+    s_active_config._reserved0     = 0u;
+    s_active_config.source         = MOTOR_SOURCE_ADC;
+    s_active_config.run_state      = MOTOR_RUN_RUN;
+    s_active_config.sample_rate_hz = 20000u;
+    s_active_config.imu_rate_hz    = 1000u;
 
     crc32_init();
     gpio_init();
